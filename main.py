@@ -1,12 +1,12 @@
 from fastapi import FastAPI, HTTPException
-from repositories import tickets, comentarios, cambios_estado, usuarios
+from repositories import cambios_estado, comentarios,tickets, usuarios
+from services import auth
 
 app = FastAPI()
 
 @app.get("/")
 def home():
     return {"message": "API de Soporte TI funcionando"}
-
 
 # Crear usuario (solo Postman)
 @app.post("/usuarios")
@@ -27,7 +27,8 @@ def login(data: dict):
     user = usuarios.autenticar_usuario(data['usuario'], data['contraseña'])
     if not user:
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
-    return {"id_usuario": user['id_usuario'], "usuario": user['usuario'], "rol": user['rol']}
+    token = auth.crear_token(user)
+    return {"access_token": token, "token_type": "bearer"}
 
 # Listar usuarios (solo para pruebas)
 @app.get("/usuarios")

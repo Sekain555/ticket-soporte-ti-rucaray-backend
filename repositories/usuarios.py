@@ -5,12 +5,13 @@ import bcrypt
 def crear_usuario(nombre, apellido, correo, usuario, contraseña, rol):
     conn = get_connection()
     cursor = conn.cursor()
-    hashed_pw = bcrypt.hash(contraseña)
+    salt = bcrypt.gensalt()
+    hashed_pw = bcrypt.hashpw(contraseña.encode('utf-8'), salt)
     sql = """
         INSERT INTO usuarios (nombre, apellido, correo, usuario, contraseña, rol, fecha_creacion)
         VALUES (%s, %s, %s, %s, %s, %s, NOW())
     """
-    cursor.execute(sql, (nombre, apellido, correo, usuario, hashed_pw, rol))
+    cursor.execute(sql, (nombre, apellido, correo, usuario, hashed_pw.decode('utf-8'), rol))
     conn.commit()
     id_usuario = cursor.lastrowid
     cursor.close()
@@ -26,7 +27,7 @@ def autenticar_usuario(usuario, contraseña):
     user = cursor.fetchone()
     cursor.close()
     conn.close()
-    if user and bcrypt.verify(contraseña, user['contraseña']):
+    if user and bcrypt.checkpw(contraseña.encode("utf-8"), user["contraseña"].encode("utf-8")):
         return user
     return None
 
