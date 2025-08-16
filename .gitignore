@@ -1,0 +1,11 @@
+database.py
+test_mysql.py
+
+# Entorno virtual
+venv/
+.env
+
+# Cachés de Python
+__pycache__/
+*.py[cod]
+*.pyo
