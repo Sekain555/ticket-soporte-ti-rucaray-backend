@@ -5,9 +5,10 @@ from services import auth
 
 app = FastAPI()
 
-# Define qué orígenes pueden acceder
+# Define qué orígenes pueden acceder    
 origins = [
     "http://localhost:8100",  # Ionic local
+    "http://192.168.4.195:8100",  # IP local de tu dispositivo móvil
     "http://127.0.0.1:8100",  # a veces Ionic sirve con 127
     # "https://tu-dominio.com" # cuando subas a producción
 ]
@@ -17,7 +18,7 @@ app.add_middleware(
     allow_origins=origins,  # dominios permitidos
     allow_credentials=True,
     allow_methods=["*"],  # puedes restringir a ["GET", "POST"]
-    allow_headers=["*"],  # puedes especificar ["Authorization", "Content-Type"]
+    allow_headers=["Authorization", "Content-Type"],  # puedes especificar ["Authorization", "Content-Type"]
 )
 
 
@@ -72,16 +73,13 @@ def listar_usuarios_endpoint():
 def crear_ticket_endpoint(ticket: dict, request: Request):
     # Obtener el token del header Authorization
     auth_header = request.headers.get("Authorization")
-    print("Authorization header:", auth_header)
 
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token faltante o inválido")
 
     token = auth_header.split(" ")[1]
-    print("Token a verificar:", token)
 
     payload = auth.verificar_token(token)
-    print("Payload verificado:", payload)
 
     if not payload or "sub" not in payload:
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
