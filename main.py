@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from repositories import cambios_estado, comentarios, tickets, usuarios
 from services import auth
@@ -69,9 +69,28 @@ def listar_usuarios_endpoint():
 
 # Tickets
 @app.post("/tickets/")
-def crear_ticket_endpoint(ticket: dict):
+def crear_ticket_endpoint(ticket: dict, request: Request):
+    # Obtener el token del header Authorization
+    auth_header = request.headers.get("Authorization")
+    print("Authorization header:", auth_header)
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token faltante o inválido")
+
+    token = auth_header.split(" ")[1]
+    print("Token a verificar:", token)
+
+    payload = auth.verificar_token(token)
+    print("Payload verificado:", payload)
+
+    if not payload or "sub" not in payload:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+    # Tomar id_usuario del token
+    id_usuario = payload["sub"]
+
     id_ticket = tickets.crear_ticket(
-        ticket["id_usuario"],
+        id_usuario,
         ticket["titulo"],
         ticket["descripcion"],
         ticket["tipo_problema"],
