@@ -20,7 +20,7 @@ def crear_token(usuario: dict):
         + datetime.timedelta(hours=2),  # expira en 2 horas
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    return token if isinstance(token, str) else token.decode("utf-8")
+    return token
 
 
 def verificar_token(token: str):
@@ -30,10 +30,6 @@ def verificar_token(token: str):
     except Exception as e:
         print("Error al verificar token:", repr(e))
         return None
-    except jwt.ExpiredSignatureError:
-        return None  # token expirado
-    except jwt.InvalidTokenError:
-        return None  # token inválido
 
 
 def _extraer_token_de_header(request: Request) -> str:
@@ -78,7 +74,7 @@ def obtener_usuario_desde_request(request: Request) -> dict:
         )
 
     try:
-        id_usuario = int(sub)  # tu 'sub' se guarda como string en el token
+        id_usuario = int(sub)
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

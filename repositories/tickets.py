@@ -1,5 +1,6 @@
 from database import get_connection
 
+
 # Crear un nuevo ticket
 def crear_ticket(
     id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo=None
@@ -21,7 +22,7 @@ def crear_ticket(
 
 
 # Listar tickets
-def listar_tickets(rol, id_usuario):
+def listar_tickets(rol):
     conn = None
     cursor = None
     tickets = []
@@ -31,21 +32,19 @@ def listar_tickets(rol, id_usuario):
         cursor = conn.cursor(dictionary=True)
 
         if rol == "admin":
-            sql = "SELECT * FROM tickets ORDER BY fecha_creacion DESC"
+            sql = "SELECT * FROM tickets ORDER BY fecha_creacion ASC"
             cursor.execute(sql)
 
         elif rol == "soporte":
-            # Se asume que la columna id_soporte existe
             sql = """
-                SELECT * FROM tickets 
-                WHERE id_usuario = %s OR id_soporte = %s 
-                ORDER BY fecha_creacion DESC
+                SELECT * FROM tickets
+                ORDER BY fecha_creacion ASC
             """
-            cursor.execute(sql, (id_usuario, id_usuario))
+            cursor.execute(sql)
 
-        else:  # usuario_rucaray o cualquier otro rol no admin/soporte
-            sql = "SELECT * FROM tickets WHERE id_usuario = %s ORDER BY fecha_creacion DESC"
-            cursor.execute(sql, (id_usuario,))
+        else:
+            sql = "SELECT * FROM tickets WHERE id_usuario = %s ORDER BY fecha_creacion ASC"
+            cursor.execute(sql)
 
         tickets = cursor.fetchall()
 

@@ -83,8 +83,12 @@ def crear_ticket_endpoint(ticket: dict, request: Request):
 
 
 @app.get("/tickets/")
-def listar_tickets_endpoint(id_usuario: int = None):
-    return tickets.listar_tickets(id_usuario)
+def listar_tickets_endpoint(request: Request):
+    payload = auth.obtener_payload(request)
+    rol = payload.get("rol")
+    id_usuario = payload.get("sub")
+
+    return tickets.listar_tickets(rol)
 
 
 @app.get("/tickets/{id_ticket}")
