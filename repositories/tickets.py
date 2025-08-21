@@ -22,7 +22,7 @@ def crear_ticket(
 
 
 # Listar tickets
-def listar_tickets(rol):
+def listar_tickets(rol, id_usuario):
     conn = None
     cursor = None
     tickets = []
@@ -43,8 +43,8 @@ def listar_tickets(rol):
             cursor.execute(sql)
 
         else:
-            sql = "SELECT * FROM tickets WHERE id_usuario = %s ORDER BY fecha_creacion ASC"
-            cursor.execute(sql)
+            sql = """SELECT * FROM tickets WHERE id_usuario = %s ORDER BY fecha_creacion ASC"""
+            cursor.execute(sql, (id_usuario,))
 
         tickets = cursor.fetchall()
 

@@ -88,7 +88,7 @@ def listar_tickets_endpoint(request: Request):
     rol = payload.get("rol")
     id_usuario = payload.get("sub")
 
-    return tickets.listar_tickets(rol)
+    return tickets.listar_tickets(rol, id_usuario)
 
 
 @app.get("/tickets/{id_ticket}")
