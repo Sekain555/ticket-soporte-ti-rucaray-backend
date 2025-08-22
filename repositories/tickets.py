@@ -65,7 +65,17 @@ def listar_tickets(rol, id_usuario):
 def obtener_ticket(id_ticket):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    sql = "SELECT * FROM tickets WHERE id_ticket = %s"
+    sql = """
+    SELECT 
+        t.*, 
+        u.nombre AS nombre_usuario, 
+        u.apellido AS apellido_usuario,
+        u.departamento AS departamento_usuario,
+        u.puesto AS puesto_usuario
+    FROM tickets t
+    JOIN usuarios u ON t.id_usuario = u.id_usuario
+    WHERE t.id_ticket = %s
+    """
     cursor.execute(sql, (id_ticket,))
     ticket = cursor.fetchone()
     cursor.close()

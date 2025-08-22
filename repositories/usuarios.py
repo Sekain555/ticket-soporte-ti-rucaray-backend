@@ -2,16 +2,16 @@ from database import get_connection
 import bcrypt
 
 # Crear usuario (para pruebas)
-def crear_usuario(nombre, apellido, correo, usuario, contraseña, rol):
+def crear_usuario(nombre, apellido, correo, usuario, contraseña, rol, departamento, puesto):
     conn = get_connection()
     cursor = conn.cursor()
     salt = bcrypt.gensalt()
     hashed_pw = bcrypt.hashpw(contraseña.encode('utf-8'), salt)
     sql = """
-        INSERT INTO usuarios (nombre, apellido, correo, usuario, contraseña, rol, fecha_creacion)
-        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        INSERT INTO usuarios (nombre, apellido, correo, usuario, contraseña, rol, fecha_creacion, departamento, puesto)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s, %s)
     """
-    cursor.execute(sql, (nombre, apellido, correo, usuario, hashed_pw.decode('utf-8'), rol))
+    cursor.execute(sql, (nombre, apellido, correo, usuario, hashed_pw.decode('utf-8'), rol, departamento, puesto))
     conn.commit()
     id_usuario = cursor.lastrowid
     cursor.close()

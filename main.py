@@ -5,7 +5,6 @@ from services import auth
 
 app = FastAPI()
 
-# Define qué orígenes pueden acceder    
 origins = [
     "http://localhost:8100",  # Ionic local
     "http://192.168.4.195:8100",  # IP local de tu dispositivo móvil
@@ -17,7 +16,10 @@ app.add_middleware(
     allow_origins=origins,  # dominios permitidos
     allow_credentials=True,
     allow_methods=["*"],  # puedes restringir a ["GET", "POST"]
-    allow_headers=["Authorization", "Content-Type"],  # puedes especificar ["Authorization", "Content-Type"]
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+    ],  # puedes especificar ["Authorization", "Content-Type"]
 )
 
 
@@ -36,6 +38,8 @@ def crear_usuario_endpoint(data: dict):
         data["usuario"],
         data["contraseña"],
         data["rol"],
+        data["departamento"],
+        data["puesto"]
     )
     return {"id_usuario": id_usuario}
 
