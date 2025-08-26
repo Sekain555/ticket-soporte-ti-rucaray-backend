@@ -7,6 +7,7 @@ def crear_ticket(
 ):
     conn = get_connection()
     cursor = conn.cursor()
+
     sql = """
         INSERT INTO tickets (id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo, estado, fecha_creacion, fecha_actualizacion)
         VALUES (%s, %s, %s, %s, %s, %s, 'abierto', NOW(), NOW())
@@ -16,6 +17,17 @@ def crear_ticket(
     )
     conn.commit()
     id_ticket = cursor.lastrowid
+
+    # Insertar comentario en el feed
+    sql_feed = """
+        INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)
+        VALUES (%s, %s, %s, %s, NOW())
+    """
+    cursor.execute(
+        sql_feed, (id_ticket, id_usuario, "creacion_ticket", "Ticket creado")
+    )
+    conn.commit()
+
     cursor.close()
     conn.close()
     return id_ticket
@@ -84,15 +96,39 @@ def obtener_ticket(id_ticket):
 
 
 # Actualizar estado de un ticket
-def actualizar_estado_ticket(id_ticket, nuevo_estado):
+def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario):
     conn = get_connection()
-    cursor = conn.cursor()
-    sql = """
+    cursor = conn.cursor(dictionary=True)
+
+    # Obtener estado actual
+    cursor.execute("SELECT estado FROM tickets WHERE id_ticket = %s", (id_ticket,))
+    ticket = cursor.fetchone()
+    if not ticket:
+        cursor.close()
+        conn.close()
+        raise ValueError(f"Ticket {id_ticket} no encontrado")
+
+    estado_anterior = ticket["estado"]
+
+    # Actualizar estado en tickets
+    cursor.execute(
+        """
         UPDATE tickets
         SET estado = %s, fecha_actualizacion = NOW()
         WHERE id_ticket = %s
-    """
-    cursor.execute(sql, (nuevo_estado, id_ticket))
+        """,
+        (nuevo_estado, id_ticket),
+    )
+
+    # Registrar cambio en cambios_estado
+    cursor.execute(
+        """
+        INSERT INTO cambios_estado (id_ticket, estado_anterior, estado_nuevo, id_usuario, fecha_cambio)
+        VALUES (%s, %s, %s, %s, NOW())
+        """,
+        (id_ticket, estado_anterior, nuevo_estado, id_usuario),
+    )
+
     conn.commit()
     cursor.close()
     conn.close()
