@@ -103,10 +103,38 @@ def obtener_ticket_endpoint(id_ticket: int):
     return ticket
 
 # Actualizar estado del ticket
-@app.put("/tickets/{id_ticket}/estado")
-def actualizar_estado_ticket_endpoint(id_ticket: int, estado: str):
-    tickets.actualizar_estado_ticket(id_ticket, estado)
-    return {"status": "actualizado"}
+@app.patch("/tickets/{id_ticket}/estado")
+def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Request):
+    try:
+        # Usuario actual desde el token
+        current_user = auth.obtener_usuario_desde_request(request)
+
+        # Validar que se envíe el nuevo estado
+        nuevo_estado = data.get("nuevo_estado")
+        if not nuevo_estado:
+            raise HTTPException(status_code=400, detail="Se requiere el nuevo estado")
+
+        # Validar que se envíe el comentario
+        comentario = data.get("comentario")
+        if not comentario or not comentario.strip():
+            raise HTTPException(status_code=400, detail="Se requiere un comentario para cerrar el ticket")
+
+        # Llamar a la función del repositorio
+        tickets.actualizar_estado_ticket(
+            id_ticket, nuevo_estado, current_user["id_usuario"], comentario
+        )
+
+        return {
+            "status": "actualizado",
+            "id_ticket": id_ticket,
+            "nuevo_estado": nuevo_estado,
+            "comentario": comentario,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al actualizar estado: {str(e)}")
 
 
 # Comentarios y actividades (feed)

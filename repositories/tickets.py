@@ -1,4 +1,5 @@
 from database import get_connection
+from repositories.ticket_feed import agregar_comentario
 
 
 # Crear un nuevo ticket
@@ -96,7 +97,7 @@ def obtener_ticket(id_ticket):
 
 
 # Actualizar estado de un ticket
-def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario):
+def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=None):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -128,6 +129,19 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario):
         """,
         (id_ticket, estado_anterior, nuevo_estado, id_usuario),
     )
+
+    # Preparar comentario para el feed
+    if comentario and comentario.strip():
+        detalle_feed = f"Ticket {nuevo_estado} | {comentario.strip()}"
+    else:
+        detalle_feed = f"Ticket {nuevo_estado}"
+
+    # Insertar comentario en el feed
+    sql_feed = """
+        INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)
+        VALUES (%s, %s, %s, %s, NOW())
+    """
+    cursor.execute(sql_feed, (id_ticket, id_usuario, "cambio_estado", detalle_feed))
 
     conn.commit()
     cursor.close()

@@ -9,6 +9,17 @@ def agregar_comentario(id_ticket, tipo, id_usuario=None, detalle=None):
         VALUES (%s, %s, %s, %s, NOW())
     """
     cursor.execute(sql, (id_ticket, tipo, id_usuario, detalle))
+
+    # Actualizar fecha de actualización del ticket
+    cursor.execute(
+        """
+        UPDATE tickets
+        SET fecha_actualizacion = NOW()
+        WHERE id_ticket = %s
+        """,
+        (id_ticket,)
+    )
+
     conn.commit()
     id_feed = cursor.lastrowid
     cursor.close()
