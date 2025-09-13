@@ -9,17 +9,18 @@ origins = [
     "http://localhost:8100",  # Ionic local
     "http://192.168.4.195:8100",  # IP local de tu dispositivo móvil
     "http://127.0.0.1:8100",  # a veces Ionic sirve con 127
+    "http://192.168.5.84:8080"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # dominios permitidos
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # puedes restringir a ["GET", "POST"]
+    allow_methods=["*"],
     allow_headers=[
         "Authorization",
         "Content-Type",
-    ],  # puedes especificar ["Authorization", "Content-Type"]
+    ],
 )
 
 
