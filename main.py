@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from repositories import cambios_estado, ticket_feed, tickets, usuarios
 from services import auth
@@ -88,12 +88,12 @@ def crear_ticket_endpoint(ticket: dict, request: Request):
 
 # Listar tickets
 @app.get("/tickets/")
-def listar_tickets_endpoint(request: Request):
+def listar_tickets_endpoint(request: Request, sort_by: str = Query(None), order: str = Query(None)):
     payload = auth.obtener_payload(request)
     rol = payload.get("rol")
     id_usuario = payload.get("sub")
 
-    return tickets.listar_tickets(rol, id_usuario)
+    return tickets.listar_tickets(rol, id_usuario, sort_by, order)
 
 # Obtener ticket por ID
 @app.get("/tickets/{id_ticket}")

@@ -35,28 +35,45 @@ def crear_ticket(
 
 
 # Listar tickets
-def listar_tickets(rol, id_usuario):
+def listar_tickets(rol, id_usuario, sort_by=None, order=None):
     conn = None
     cursor = None
     tickets = []
+
+    def _order_by_clause(sort_by_val, order_val):
+        col_key = (sort_by_val or "fecha_creacion").strip()
+        direction = (order_val or "desc").strip().lower()
+
+        # Lista blanca de columnas/expresiones permitidas
+        ORDER_COLUMNS = {
+            "fecha_creacion": "fecha_creacion",
+            "fecha_actualizacion": "fecha_actualizacion",
+            "id_ticket": "id_ticket",
+            "prioridad": "CASE prioridad WHEN 'alta' THEN 3 WHEN 'media' THEN 2 WHEN 'baja' THEN 1 ELSE 0 END",
+        }
+
+        col_expr = ORDER_COLUMNS.get(col_key, "fecha_creacion")
+        dir_sql = "DESC" if direction == "desc" else "ASC"
+
+        # Tiebreak para orden estable
+        return f" ORDER BY {col_expr} {dir_sql}, id_ticket DESC "
+    
+    ORDER_BY = _order_by_clause(sort_by, order)
 
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         if rol == "admin":
-            sql = "SELECT * FROM tickets ORDER BY fecha_creacion ASC"
+            sql = "SELECT * FROM tickets" + ORDER_BY
             cursor.execute(sql)
 
         elif rol == "soporte":
-            sql = """
-                SELECT * FROM tickets
-                ORDER BY fecha_creacion ASC
-            """
+            sql = "SELECT * FROM tickets" + ORDER_BY
             cursor.execute(sql)
 
         else:
-            sql = """SELECT * FROM tickets WHERE id_usuario = %s ORDER BY fecha_creacion ASC"""
+            sql = "SELECT * FROM tickets WHERE id_usuario = %s" + ORDER_BY
             cursor.execute(sql, (id_usuario,))
 
         tickets = cursor.fetchall()
