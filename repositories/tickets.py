@@ -1,5 +1,6 @@
 from database import get_connection
 from repositories.ticket_feed import agregar_comentario
+from typing import Optional
 
 
 # Crear un nuevo ticket
@@ -35,10 +36,18 @@ def crear_ticket(
 
 
 # Listar tickets
-def listar_tickets(rol, id_usuario, sort_by=None, order=None):
+def listar_tickets(rol, id_usuario, sort_by=None, order=None, estado: Optional[str] = None):
     conn = None
     cursor = None
     tickets = []
+
+    # Lista blanca de estados permitidos
+    ESTADOS_MAP = {
+        "abierto": "abierto",
+        "en_progreso": "en progreso",
+        "resuelto": "resuelto",
+        "cerrado": "cerrado",
+    }
 
     def _order_by_clause(sort_by_val, order_val):
         col_key = (sort_by_val or "fecha_creacion").strip()
@@ -64,17 +73,29 @@ def listar_tickets(rol, id_usuario, sort_by=None, order=None):
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        if rol == "admin":
-            sql = "SELECT * FROM tickets" + ORDER_BY
-            cursor.execute(sql)
+        where_clauses = []
+        params = []
 
-        elif rol == "soporte":
-            sql = "SELECT * FROM tickets" + ORDER_BY
-            cursor.execute(sql)
+        # Control por rol: los usuarios "normales" solo ven sus tickets
+        if rol not in ("admin", "soporte"):
+            where_clauses.append("id_usuario = %s")
+            params.append(id_usuario)
 
-        else:
-            sql = "SELECT * FROM tickets WHERE id_usuario = %s" + ORDER_BY
-            cursor.execute(sql, (id_usuario,))
+        # Filtro por estado (si viene uno válido)
+        if estado:
+            estado = estado.strip().lower()
+            db_estado = ESTADOS_MAP.get(estado)  # None si no es válido
+            if db_estado:
+                where_clauses.append("estado = %s")
+                params.append(db_estado)
+            # Si no es válido, simplemente no filtramos por estado (fail-safe)
+
+        base_sql = "SELECT * FROM tickets"
+        if where_clauses:
+            base_sql += " WHERE " + " AND ".join(where_clauses)
+
+        sql = base_sql + ORDER_BY
+        cursor.execute(sql, tuple(params) if params else None)
 
         tickets = cursor.fetchall()
 

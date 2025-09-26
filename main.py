@@ -9,7 +9,7 @@ origins = [
     "http://localhost:8100",  # Ionic local
     "http://192.168.4.195:8100",  # IP local de tu dispositivo móvil
     "http://127.0.0.1:8100",  # a veces Ionic sirve con 127
-    "http://192.168.5.84:8080"
+    "http://192.168.5.84:8080",
 ]
 
 app.add_middleware(
@@ -40,7 +40,7 @@ def crear_usuario_endpoint(data: dict):
         data["contraseña"],
         data["rol"],
         data["departamento"],
-        data["puesto"]
+        data["puesto"],
     )
     return {"id_usuario": id_usuario}
 
@@ -86,14 +86,29 @@ def crear_ticket_endpoint(ticket: dict, request: Request):
     )
     return {"id_ticket": id_ticket}
 
+
 # Listar tickets
 @app.get("/tickets/")
-def listar_tickets_endpoint(request: Request, sort_by: str = Query(None), order: str = Query(None)):
+def listar_tickets_endpoint(
+    request: Request,
+    sort_by: str = Query(None),
+    order: str = Query(None),
+    estado: str = Query(None,
+    description="abierto | en_progreso | resuelto | cerrado | todos"),
+):
     payload = auth.obtener_payload(request)
     rol = payload.get("rol")
     id_usuario = payload.get("sub")
 
-    return tickets.listar_tickets(rol, id_usuario, sort_by, order)
+    estado_norm = (estado or "").strip().lower()
+    if estado_norm in ("", "todos"):
+        estado_param = None
+    else:
+        ALLOWED = {"abierto", "en_progreso", "resuelto", "cerrado"}
+        estado_param = estado_norm if estado_norm in ALLOWED else None
+
+    return tickets.listar_tickets(rol, id_usuario, sort_by, order, estado_param)
+
 
 # Obtener ticket por ID
 @app.get("/tickets/{id_ticket}")
@@ -102,6 +117,7 @@ def obtener_ticket_endpoint(id_ticket: int):
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     return ticket
+
 
 # Actualizar estado del ticket
 @app.patch("/tickets/{id_ticket}/estado")
@@ -118,7 +134,10 @@ def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Reque
         # Validar que se envíe el comentario
         comentario = data.get("comentario")
         if not comentario or not comentario.strip():
-            raise HTTPException(status_code=400, detail="Se requiere un comentario para cerrar el ticket")
+            raise HTTPException(
+                status_code=400,
+                detail="Se requiere un comentario para cerrar el ticket",
+            )
 
         # Llamar a la función del repositorio
         tickets.actualizar_estado_ticket(
@@ -135,7 +154,9 @@ def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Reque
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al actualizar estado: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al actualizar estado: {str(e)}"
+        )
 
 
 # Comentarios y actividades (feed)
