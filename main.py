@@ -9,7 +9,7 @@ origins = [
     "http://localhost:8100",  # Ionic local
     "http://192.168.4.195:8100",  # IP local de tu dispositivo móvil
     "http://127.0.0.1:8100",  # a veces Ionic sirve con 127
-    "http://192.168.5.84:8080",
+    "http://192.168.4.246:2000",
 ]
 
 app.add_middleware(
@@ -93,8 +93,15 @@ def listar_tickets_endpoint(
     request: Request,
     sort_by: str = Query(None),
     order: str = Query(None),
-    estado: str = Query(None,
-    description="abierto | en_progreso | resuelto | cerrado | todos"),
+    estado: str = Query(
+        None, description="abierto | en_progreso | resuelto | cerrado | todos"
+    ),
+    limit: int = Query(
+        10, ge=1, le=100, description="Cantidad de tickets por página (deault 10)"
+    ),
+    offset: int = Query(
+        0, ge=0, description="Desplazamiento para paginación (default 0)"
+    ),
 ):
     payload = auth.obtener_payload(request)
     rol = payload.get("rol")
@@ -107,7 +114,15 @@ def listar_tickets_endpoint(
         ALLOWED = {"abierto", "en_progreso", "resuelto", "cerrado"}
         estado_param = estado_norm if estado_norm in ALLOWED else None
 
-    return tickets.listar_tickets(rol, id_usuario, sort_by, order, estado_param)
+    return tickets.listar_tickets(
+        rol=rol,
+        id_usuario=id_usuario,
+        sort_by=sort_by,
+        order=order,
+        estado=estado_param,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # Obtener ticket por ID
