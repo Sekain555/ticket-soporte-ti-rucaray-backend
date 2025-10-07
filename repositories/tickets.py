@@ -36,10 +36,19 @@ def crear_ticket(
 
 
 # Listar tickets
-def listar_tickets(rol, id_usuario, sort_by=None, order=None, estado: Optional[str] = None):
+def listar_tickets(
+    rol,
+    id_usuario,
+    sort_by=None,
+    order=None,
+    estado: Optional[str] = None,
+    limit: int = 10,
+    offset: int = 0,
+):
     conn = None
     cursor = None
     tickets = []
+    total = 0
 
     # Lista blanca de estados permitidos
     ESTADOS_MAP = {
@@ -66,7 +75,7 @@ def listar_tickets(rol, id_usuario, sort_by=None, order=None, estado: Optional[s
 
         # Tiebreak para orden estable
         return f" ORDER BY {col_expr} {dir_sql}, id_ticket DESC "
-    
+
     ORDER_BY = _order_by_clause(sort_by, order)
 
     try:
@@ -90,13 +99,22 @@ def listar_tickets(rol, id_usuario, sort_by=None, order=None, estado: Optional[s
                 params.append(db_estado)
             # Si no es válido, simplemente no filtramos por estado (fail-safe)
 
+        count_sql = "SELECT COUNT(*) AS total FROM tickets"
+        if where_clauses:
+            count_sql += " WHERE " + " AND ".join(where_clauses)
+        cursor.execute(count_sql, tuple(params) if params else None)
+        row = cursor.fetchone()
+        total = row["total"] if row and "total" in row else 0
+
         base_sql = "SELECT * FROM tickets"
         if where_clauses:
             base_sql += " WHERE " + " AND ".join(where_clauses)
 
-        sql = base_sql + ORDER_BY
-        cursor.execute(sql, tuple(params) if params else None)
+        sql = base_sql + ORDER_BY + " LIMIT %s OFFSET %s"
+        params_items = list(params)
+        params_items.extend([limit, offset])
 
+        cursor.execute(sql, tuple(params_items))
         tickets = cursor.fetchall()
 
     except Exception as e:
@@ -109,7 +127,7 @@ def listar_tickets(rol, id_usuario, sort_by=None, order=None, estado: Optional[s
         if conn:
             conn.close()
 
-    return tickets
+    return {"tickets": tickets, "total": total, "limit": limit, "offset": offset}
 
 
 # Obtener detalles de un ticket
