@@ -16,8 +16,8 @@ def crear_token(usuario: dict):
         "sub": str(usuario["id_usuario"]),  # id del usuario
         "usuario": usuario["usuario"],
         "rol": usuario["rol"],
-        "exp": datetime.datetime.now(datetime.timezone.utc)
-        + datetime.timedelta(hours=2),  # expira en 2 horas
+        #"exp": datetime.datetime.now(datetime.timezone.utc)
+        #+ datetime.timedelta(hours=2),  # expira en 2 horas
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token
