@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from repositories import cambios_estado, ticket_feed, tickets, usuarios
 from services import auth
+from version import __version__
 
-app = FastAPI()
+app = FastAPI(title="Tickets API", version=__version__)
 
 origins = [
     "http://localhost:8100",  # Ionic local
@@ -28,6 +29,10 @@ app.add_middleware(
 def home():
     return {"message": "API de Soporte TI funcionando"}
 
+
+@app.get("/version")
+def get_version():
+    return {"service": "tickets-backend", "version": __version__, "api": "v1"}
 
 # Crear usuario (solo Postman)
 @app.post("/usuarios")
