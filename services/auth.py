@@ -1,7 +1,7 @@
 import jwt
-import datetime
+# import datetime
 from dotenv import load_dotenv
-from fastapi import Request, HTTPException, status
+from fastapi import Request, HTTPException, status, Depends
 import os
 
 load_dotenv()
@@ -16,8 +16,8 @@ def crear_token(usuario: dict):
         "sub": str(usuario["id_usuario"]),  # id del usuario
         "usuario": usuario["usuario"],
         "rol": usuario["rol"],
-        #"exp": datetime.datetime.now(datetime.timezone.utc)
-        #+ datetime.timedelta(hours=2),  # expira en 2 horas
+        # "exp": datetime.datetime.now(datetime.timezone.utc)
+        # + datetime.timedelta(hours=2),  # expira en 2 horas
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token
@@ -87,3 +87,15 @@ def obtener_usuario_desde_request(request: Request) -> dict:
         "usuario": usuario,
         "payload": payload,
     }
+
+
+def role_required(roles_permitidos: list[str]):
+    def wrapper(usuario=Depends(obtener_usuario_desde_request)):
+        rol_usuario = usuario["rol"]
+        if rol_usuario not in roles_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acción no permitida para el rol '{rol_usuario}'",
+            )
+        return usuario
+    return wrapper
