@@ -1,5 +1,21 @@
 # 📗 CHANGELOG — Backend (FastAPI / MySQL)
 
+## [1.0.0] — 2026-02-15
+### Added
+- Implementación formal de control de acceso basado en roles (RBAC) mediante decorator `role_required` en endpoints protegidos.
+
+### Changed
+- Limpieza y simplificación del manejo de expiración de tokens JWT.
+- Refuerzo en validación de permisos por endpoint.
+
+### Compatibility
+- Probado con Frontend `1.0.0`.
+- Contrato API mantiene versión `/api/v1`.
+
+### Notes
+- Primer release estable en producción.
+- Se promueven a estable funcionalidades validadas en versiones beta previas.
+
 ---
 
 ## [0.9.0-beta.1] — 2025-10-20
@@ -47,5 +63,6 @@
 
 | Frontend | Backend | Estado | Fecha | Notas |
 |-----------|----------|--------|--------|-------|
+| 1.0.0 | 1.0.0 | ✅ Compatible | 2026-02-15 | Primera versión estable en producción |
 | 0.10.0-rc.1 | 0.9.0-beta.1 | ✅ Compatible | 2025-10-20 | Release conjunto en entorno de pruebas |
 | 0.9.0-rc.1 | 0.8.0-beta.1 | ✅ Compatible | 2025-09-28 | Versión inicial integrada |
