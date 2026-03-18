@@ -5,7 +5,7 @@ from typing import Optional
 
 # Crear un nuevo ticket
 def crear_ticket(
-    id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo=None
+    id_usuario, titulo, descripcion, prioridad, dispositivo=None, tipo_problema=None
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -198,6 +198,49 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
         VALUES (%s, %s, %s, %s, NOW())
     """
     cursor.execute(sql_feed, (id_ticket, id_usuario, "cambio_estado", detalle_feed))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True
+
+def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, rol):
+    # Permiso backend (obligatorio)
+    if rol not in ("admin", "soporte"):
+        raise PermissionError("No autorizado")
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Verificar ticket existe y obtener tipo anterior
+    cursor.execute("SELECT tipo_problema FROM tickets WHERE id_ticket = %s", (id_ticket,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        conn.close()
+        raise ValueError(f"Ticket {id_ticket} no encontrado")
+
+    tipo_anterior = row["tipo_problema"]
+
+    # Update
+    cursor.execute(
+        """
+        UPDATE tickets
+        SET tipo_problema = %s, fecha_actualizacion = NOW()
+        WHERE id_ticket = %s
+        """,
+        (nuevo_tipo_problema, id_ticket),
+    )
+
+    # Feed
+    detalle_feed = f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
+    cursor.execute(
+        """
+        INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)
+        VALUES (%s, %s, %s, %s, NOW())
+        """,
+        (id_ticket, id_usuario, "cambio_categoria", detalle_feed),
+    )
 
     conn.commit()
     cursor.close()

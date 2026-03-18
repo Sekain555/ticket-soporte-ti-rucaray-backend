@@ -85,9 +85,9 @@ def crear_ticket_endpoint(ticket: dict, request: Request):
         current["id_usuario"],
         ticket["titulo"],
         ticket["descripcion"],
-        ticket["tipo_problema"],
         ticket["prioridad"],
         ticket.get("dispositivo"),
+        ticket.get("tipo_problema"),
     )
     return {"id_ticket": id_ticket}
 
@@ -208,3 +208,38 @@ def agregar_cambio_estado_endpoint(id_ticket: int, data: dict):
 @app.get("/tickets/{id_ticket}/cambios-estado")
 def listar_cambios_estado_endpoint(id_ticket: int):
     return cambios_estado.listar_cambios_estado(id_ticket)
+
+@app.patch("/tickets/{id_ticket}/tipo-problema")
+def actualizar_tipo_problema_ticket_endpoint(id_ticket: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+
+        nuevo_tipo_problema = data.get("tipo_problema")
+        if not nuevo_tipo_problema:
+            raise HTTPException(
+                status_code=400,
+                detail="Se requiere el tipo de problema"
+            )
+
+        tickets.actualizar_tipo_problema_ticket(
+            id_ticket=id_ticket,
+            nuevo_tipo_problema=nuevo_tipo_problema,
+            id_usuario=current_user["id_usuario"],
+            rol=current_user["rol"],
+        )
+
+        return {
+            "status": "actualizado",
+            "id_ticket": id_ticket,
+            "tipo_problema": nuevo_tipo_problema,
+        }
+
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al actualizar tipo de problema: {str(e)}"
+        )
