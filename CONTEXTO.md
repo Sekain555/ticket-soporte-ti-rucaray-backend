@@ -58,7 +58,7 @@ Toda operación de BD pasa por los repositories. `main.py` orquesta endpoints y 
 | `id_ticket` | INT PK | Auto-incremental |
 | `titulo` | VARCHAR | Obligatorio |
 | `descripcion` | TEXT | Obligatorio |
-| `tipo_problema` | VARCHAR | Define SLA asignado |
+| `tipo_problema` | VARCHAR(100) | Nombre descriptivo — debe coincidir con sla_tipos_problema.tipo_problema |
 | `prioridad` | VARCHAR | |
 | `dispositivo` | VARCHAR | |
 | `estado` | ENUM | `abierto`, `en_progreso`, `resuelto`, `cerrado` |
@@ -188,14 +188,15 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Control de acceso por rol
 - Filtro, paginación y ordenamiento de tickets
 - Restricción de acciones por rol (en revisión frontend)
-- Definición de SLA por tipo de problema
+- Definición de SLA por tipo de problema (integrado con frontend)
+- Definición de SLA por tipo de problema (tabla sla_tipos_problema)
+- Asignación automática de tiempo objetivo al crear ticket
 
 ### EN REVISIÓN 🔄
-- Definición de SLA por tipo de problema (integrado con frontend)
 - Restricción de acciones por usuario/rol
 
 ### EN PROGRESO 🚧
-- Asignación automática de tiempo objetivo al crear ticket
+- (ninguna)
 
 ### BACKLOG (prioridad de arriba hacia abajo, según tablero Trello)
 Ver tablero para lista completa — los items de backend relevantes incluyen:

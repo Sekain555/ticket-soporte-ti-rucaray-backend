@@ -8,19 +8,51 @@ def crear_ticket(
     id_usuario, titulo, descripcion, prioridad, dispositivo=None, tipo_problema=None
 ):
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
+    # Obtener SLA para el tipo de problema
+    tiempo_objetivo_horas = None
+    fecha_limite_resolucion = None
+
+    if tipo_problema:
+        cursor.execute(
+            """
+            SELECT tiempo_maximo_horas
+            FROM sla_tipos_problema
+            WHERE tipo_problema = %s AND activo = 1
+            """,
+            (tipo_problema,),
+        )
+        sla = cursor.fetchone()
+        if sla:
+            tiempo_objetivo_horas = sla["tiempo_maximo_horas"]
+
+    # Insertar ticket
     sql = """
-        INSERT INTO tickets (id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo, estado, fecha_creacion, fecha_actualizacion)
-        VALUES (%s, %s, %s, %s, %s, %s, 'abierto', NOW(), NOW())
+        INSERT INTO tickets (
+            id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo,
+            estado, fecha_creacion, fecha_actualizacion,
+            tiempo_objetivo_horas, fecha_limite_resolucion
+        )
+        VALUES (
+            %s, %s, %s, %s, %s, %s,
+            'abierto', NOW(), NOW(),
+            %s,
+            CASE WHEN %s IS NOT NULL THEN DATE_ADD(NOW(), INTERVAL %s HOUR) ELSE NULL END
+        )
     """
     cursor.execute(
-        sql, (id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo)
+        sql,
+        (
+            id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo,
+            tiempo_objetivo_horas,
+            tiempo_objetivo_horas, tiempo_objetivo_horas,
+        ),
     )
     conn.commit()
     id_ticket = cursor.lastrowid
 
-    # Insertar comentario en el feed
+    # Insertar en el feed
     sql_feed = """
         INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)
         VALUES (%s, %s, %s, %s, NOW())
