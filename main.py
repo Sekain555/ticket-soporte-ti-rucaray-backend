@@ -34,6 +34,7 @@ def home():
 def get_version():
     return {"service": "tickets-backend", "version": __version__, "api": "v1"}
 
+
 # Crear usuario (solo Postman)
 @app.post("/usuarios")
 def crear_usuario_endpoint(data: dict):
@@ -102,7 +103,7 @@ def listar_tickets_endpoint(
         None, description="abierto | en_progreso | resuelto | cerrado | todos"
     ),
     limit: int = Query(
-        10, ge=1, le=100, description="Cantidad de tickets por página (deault 10)"
+        10, ge=1, le=100, description="Cantidad de tickets por página (default 10)"
     ),
     offset: int = Query(
         0, ge=0, description="Desplazamiento para paginación (default 0)"
@@ -143,15 +144,12 @@ def obtener_ticket_endpoint(id_ticket: int):
 @app.patch("/tickets/{id_ticket}/estado")
 def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Request):
     try:
-        # Usuario actual desde el token
         current_user = auth.obtener_usuario_desde_request(request)
 
-        # Validar que se envíe el nuevo estado
         nuevo_estado = data.get("nuevo_estado")
         if not nuevo_estado:
             raise HTTPException(status_code=400, detail="Se requiere el nuevo estado")
 
-        # Validar que se envíe el comentario
         comentario = data.get("comentario")
         if not comentario or not comentario.strip():
             raise HTTPException(
@@ -159,8 +157,7 @@ def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Reque
                 detail="Se requiere un comentario para cerrar el ticket",
             )
 
-        # Llamar a la función del repositorio
-        tickets.actualizar_estado_ticket(
+        resultado_sla = tickets.actualizar_estado_ticket(
             id_ticket, nuevo_estado, current_user["id_usuario"], comentario
         )
 
@@ -169,6 +166,7 @@ def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Reque
             "id_ticket": id_ticket,
             "nuevo_estado": nuevo_estado,
             "comentario": comentario,
+            "resultado_sla": resultado_sla,  # None si no es cierre
         }
 
     except ValueError as e:
@@ -208,6 +206,7 @@ def agregar_cambio_estado_endpoint(id_ticket: int, data: dict):
 @app.get("/tickets/{id_ticket}/cambios-estado")
 def listar_cambios_estado_endpoint(id_ticket: int):
     return cambios_estado.listar_cambios_estado(id_ticket)
+
 
 @app.patch("/tickets/{id_ticket}/tipo-problema")
 def actualizar_tipo_problema_ticket_endpoint(id_ticket: int, data: dict, request: Request):
