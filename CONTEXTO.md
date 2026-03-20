@@ -193,6 +193,8 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Definición de SLA por tipo de problema (tabla sla_tipos_problema)
 - Asignación automática de tiempo objetivo al crear ticket
 - Evaluación de cumplimiento SLA al cerrar ticket (tabla sla_cumplimiento)
+- Visualización de tiempo objetivo: obtener_ticket() retorna sla_tiempo_minimo_horas vía JOIN
+- Recálculo automático de SLA al cambiar categoría del ticket
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol
@@ -202,7 +204,6 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ### BACKLOG (prioridad de arriba hacia abajo, según tablero Trello)
 Ver tablero para lista completa — los items de backend relevantes incluyen:
-- Evaluación de Cumplimiento SLA al Cerrar Ticket
 - Registro Histórico de Cumplimiento SLA
 - Cálculo Automático del KPI de Resolución TI
 - Exportación de Reporte KPI
