@@ -161,13 +161,15 @@ def obtener_ticket(id_ticket):
     cursor = conn.cursor(dictionary=True)
     sql = """
     SELECT 
-        t.*, 
-        u.nombre AS nombre_usuario, 
+        t.*,
+        u.nombre AS nombre_usuario,
         u.apellido AS apellido_usuario,
         u.departamento AS departamento_usuario,
-        u.puesto AS puesto_usuario
+        u.puesto AS puesto_usuario,
+        s.tiempo_minimo_horas AS sla_tiempo_minimo_horas
     FROM tickets t
     JOIN usuarios u ON t.id_usuario = u.id_usuario
+    LEFT JOIN sla_tipos_problema s ON t.tipo_problema = s.tipo_problema AND s.activo = 1
     WHERE t.id_ticket = %s
     """
     cursor.execute(sql, (id_ticket,))
@@ -269,7 +271,7 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT tipo_problema FROM tickets WHERE id_ticket = %s", (id_ticket,))
+    cursor.execute("SELECT tipo_problema, fecha_creacion FROM tickets WHERE id_ticket = %s", (id_ticket,))
     row = cursor.fetchone()
     if not row:
         cursor.close()
@@ -277,14 +279,39 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
         raise ValueError(f"Ticket {id_ticket} no encontrado")
 
     tipo_anterior = row["tipo_problema"]
+    fecha_creacion = row["fecha_creacion"]
 
+    # Obtener nuevo SLA
+    cursor.execute(
+        """
+        SELECT tiempo_maximo_horas
+        FROM sla_tipos_problema
+        WHERE tipo_problema = %s AND activo = 1
+        """,
+        (nuevo_tipo_problema,),
+    )
+    sla = cursor.fetchone()
+    tiempo_objetivo_horas = sla["tiempo_maximo_horas"] if sla else None
+
+    # Actualizar tipo_problema + recalcular SLA
     cursor.execute(
         """
         UPDATE tickets
-        SET tipo_problema = %s, fecha_actualizacion = NOW()
+        SET tipo_problema = %s,
+            tiempo_objetivo_horas = %s,
+            fecha_limite_resolucion = CASE
+                WHEN %s IS NOT NULL THEN DATE_ADD(%s, INTERVAL %s HOUR)
+                ELSE NULL
+            END,
+            fecha_actualizacion = NOW()
         WHERE id_ticket = %s
         """,
-        (nuevo_tipo_problema, id_ticket),
+        (
+            nuevo_tipo_problema,
+            tiempo_objetivo_horas,
+            tiempo_objetivo_horas, fecha_creacion, tiempo_objetivo_horas,
+            id_ticket,
+        ),
     )
 
     detalle_feed = f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
