@@ -12,7 +12,6 @@ def crear_ticket(
 
     # Obtener SLA para el tipo de problema
     tiempo_objetivo_horas = None
-    fecha_limite_resolucion = None
 
     if tipo_problema:
         cursor.execute(
@@ -82,7 +81,6 @@ def listar_tickets(
     tickets = []
     total = 0
 
-    # Lista blanca de estados permitidos
     ESTADOS_MAP = {
         "abierto": "abierto",
         "en_progreso": "en progreso",
@@ -94,7 +92,6 @@ def listar_tickets(
         col_key = (sort_by_val or "fecha_creacion").strip()
         direction = (order_val or "desc").strip().lower()
 
-        # Lista blanca de columnas/expresiones permitidas
         ORDER_COLUMNS = {
             "fecha_creacion": "fecha_creacion",
             "fecha_actualizacion": "fecha_actualizacion",
@@ -105,7 +102,6 @@ def listar_tickets(
         col_expr = ORDER_COLUMNS.get(col_key, "fecha_creacion")
         dir_sql = "DESC" if direction == "desc" else "ASC"
 
-        # Tiebreak para orden estable
         return f" ORDER BY {col_expr} {dir_sql}, id_ticket DESC "
 
     ORDER_BY = _order_by_clause(sort_by, order)
@@ -117,19 +113,16 @@ def listar_tickets(
         where_clauses = []
         params = []
 
-        # Control por rol: los usuarios "normales" solo ven sus tickets
         if rol not in ("admin", "soporte"):
             where_clauses.append("id_usuario = %s")
             params.append(id_usuario)
 
-        # Filtro por estado (si viene uno válido)
         if estado:
             estado = estado.strip().lower()
-            db_estado = ESTADOS_MAP.get(estado)  # None si no es válido
+            db_estado = ESTADOS_MAP.get(estado)
             if db_estado:
                 where_clauses.append("estado = %s")
                 params.append(db_estado)
-            # Si no es válido, simplemente no filtramos por estado (fail-safe)
 
         count_sql = "SELECT COUNT(*) AS total FROM tickets"
         if where_clauses:
@@ -189,8 +182,11 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Obtener estado actual
-    cursor.execute("SELECT estado FROM tickets WHERE id_ticket = %s", (id_ticket,))
+    # Obtener datos actuales del ticket
+    cursor.execute(
+        "SELECT estado, fecha_creacion, fecha_limite_resolucion FROM tickets WHERE id_ticket = %s",
+        (id_ticket,)
+    )
     ticket = cursor.fetchone()
     if not ticket:
         cursor.close()
@@ -199,7 +195,7 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
 
     estado_anterior = ticket["estado"]
 
-    # Actualizar estado en tickets
+    # Actualizar estado
     cursor.execute(
         """
         UPDATE tickets
@@ -209,7 +205,7 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
         (nuevo_estado, id_ticket),
     )
 
-    # Registrar cambio en cambios_estado
+    # Registrar en cambios_estado
     cursor.execute(
         """
         INSERT INTO cambios_estado (id_ticket, estado_anterior, estado_nuevo, id_usuario, fecha_cambio)
@@ -218,33 +214,61 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
         (id_ticket, estado_anterior, nuevo_estado, id_usuario),
     )
 
-    # Preparar comentario para el feed
+    # Feed
     if comentario and comentario.strip():
         detalle_feed = f"Ticket {nuevo_estado} | {comentario.strip()}"
     else:
         detalle_feed = f"Ticket {nuevo_estado}"
 
-    # Insertar comentario en el feed
-    sql_feed = """
+    cursor.execute(
+        """
         INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)
         VALUES (%s, %s, %s, %s, NOW())
-    """
-    cursor.execute(sql_feed, (id_ticket, id_usuario, "cambio_estado", detalle_feed))
+        """,
+        (id_ticket, id_usuario, "cambio_estado", detalle_feed),
+    )
+
+    # Evaluación de cumplimiento SLA al cerrar
+    resultado_sla = None
+    if nuevo_estado == "cerrado":
+        fecha_creacion = ticket["fecha_creacion"]
+        fecha_limite = ticket["fecha_limite_resolucion"]
+
+        cursor.execute("SELECT NOW() AS ahora")
+        fecha_cierre = cursor.fetchone()["ahora"]
+
+        if fecha_limite is None:
+            resultado_sla = "sin_sla"
+            tiempo_real_horas = None
+        else:
+            cursor.execute(
+                "SELECT TIMESTAMPDIFF(SECOND, %s, %s) / 3600.0 AS horas",
+                (fecha_creacion, fecha_cierre)
+            )
+            tiempo_real_horas = cursor.fetchone()["horas"]
+            resultado_sla = "dentro_plazo" if fecha_cierre <= fecha_limite else "fuera_plazo"
+
+        cursor.execute(
+            """
+            INSERT INTO sla_cumplimiento (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado_sla)
+        )
 
     conn.commit()
     cursor.close()
     conn.close()
-    return True
+    return resultado_sla
+
 
 def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, rol):
-    # Permiso backend (obligatorio)
     if rol not in ("admin", "soporte"):
         raise PermissionError("No autorizado")
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Verificar ticket existe y obtener tipo anterior
     cursor.execute("SELECT tipo_problema FROM tickets WHERE id_ticket = %s", (id_ticket,))
     row = cursor.fetchone()
     if not row:
@@ -254,7 +278,6 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
 
     tipo_anterior = row["tipo_problema"]
 
-    # Update
     cursor.execute(
         """
         UPDATE tickets
@@ -264,7 +287,6 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
         (nuevo_tipo_problema, id_ticket),
     )
 
-    # Feed
     detalle_feed = f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
     cursor.execute(
         """

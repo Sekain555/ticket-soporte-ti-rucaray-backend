@@ -47,6 +47,7 @@ Toda operación de BD pasa por los repositories. `main.py` orquesta endpoints y 
 | `usuarios` | Usuarios con contraseñas encriptadas |
 | `ticket_feed` | Registro de todas las actividades (comentarios, cambios) |
 | `cambios_estado` | Historial específico de transiciones de estado |
+| `sla_cumplimiento` | Registro de evaluación SLA por cada cierre de ticket |
 
 ---
 
@@ -191,6 +192,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Definición de SLA por tipo de problema (integrado con frontend)
 - Definición de SLA por tipo de problema (tabla sla_tipos_problema)
 - Asignación automática de tiempo objetivo al crear ticket
+- Evaluación de cumplimiento SLA al cerrar ticket (tabla sla_cumplimiento)
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol
