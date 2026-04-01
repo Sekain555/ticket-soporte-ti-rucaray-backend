@@ -30,7 +30,8 @@ main.py (API Gateway)
     ├── tickets.py        → CRUD tickets + auditoría automática
     ├── usuarios.py       → Gestión de usuarios
     ├── ticket_feed.py    → Registro de actividades
-    └── cambios_estado.py → Historial de cambios de estado
+    ├── cambios_estado.py → Historial de cambios de estado
+    └── mantenciones.py → CRUD mantenciones
 ```
 
 Toda operación de BD pasa por los repositories. `main.py` orquesta endpoints y delega lógica.
@@ -48,6 +49,7 @@ Toda operación de BD pasa por los repositories. `main.py` orquesta endpoints y 
 | `ticket_feed` | Registro de todas las actividades (comentarios, cambios) |
 | `cambios_estado` | Historial específico de transiciones de estado |
 | `sla_cumplimiento` | Registro de evaluación SLA por cada cierre de ticket |
+| `mantenciones` | Agenda de mantenciones con estados y asignación de técnico |
 
 ---
 
@@ -96,6 +98,10 @@ Toda operación de BD pasa por los repositories. `main.py` orquesta endpoints y 
 | GET | `/tickets/{id}/feed` | ❌ | Listar feed del ticket |
 | POST | `/tickets/{id}/cambios-estado` | ❌ | Registrar cambio de estado |
 | GET | `/tickets/{id}/cambios-estado` | ❌ | Listar historial de estados |
+| POST | `/mantenciones/` | ✅ | Crear mantención |
+| GET | `/mantenciones/` | ✅ | Listar mantenciones (filtrado por rol) |
+| GET | `/mantenciones/{id}` | ✅ | Obtener mantención específica |
+| PATCH | `/mantenciones/{id}/estado` | ✅ | Actualizar estado (admin/soporte) |
 
 ---
 
@@ -195,6 +201,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Evaluación de cumplimiento SLA al cerrar ticket (tabla sla_cumplimiento)
 - Visualización de tiempo objetivo: obtener_ticket() retorna sla_tiempo_minimo_horas vía JOIN
 - Recálculo automático de SLA al cambiar categoría del ticket
+- Modelo de datos para Agenda de Mantenciones (tabla + repository + endpoints)
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol

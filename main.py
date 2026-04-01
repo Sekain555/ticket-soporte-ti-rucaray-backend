@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from repositories import cambios_estado, ticket_feed, tickets, usuarios
+from repositories import cambios_estado, ticket_feed, tickets, usuarios, mantenciones
 from services import auth
 from version import __version__
 
@@ -166,7 +166,7 @@ def actualizar_estado_ticket_endpoint(id_ticket: int, data: dict, request: Reque
             "id_ticket": id_ticket,
             "nuevo_estado": nuevo_estado,
             "comentario": comentario,
-            "resultado_sla": resultado_sla,  # None si no es cierre
+            "resultado_sla": resultado_sla,
         }
 
     except ValueError as e:
@@ -241,4 +241,106 @@ def actualizar_tipo_problema_ticket_endpoint(id_ticket: int, data: dict, request
         raise HTTPException(
             status_code=500,
             detail=f"Error al actualizar tipo de problema: {str(e)}"
+        )
+
+
+# ============================================================
+# Mantenciones
+# ============================================================
+
+@app.post("/mantenciones/")
+def crear_mantencion_endpoint(data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+
+        titulo = data.get("titulo")
+        if not titulo or not titulo.strip():
+            raise HTTPException(status_code=400, detail="El título es obligatorio")
+
+        fecha_propuesta = data.get("fecha_propuesta")
+        hora_inicio = data.get("hora_inicio")
+        hora_fin = data.get("hora_fin")
+
+        if not fecha_propuesta or not hora_inicio or not hora_fin:
+            raise HTTPException(
+                status_code=400,
+                detail="Se requieren fecha_propuesta, hora_inicio y hora_fin"
+            )
+
+        id_mantencion = mantenciones.crear_mantencion(
+            id_usuario_solicitante=current_user["id_usuario"],
+            titulo=titulo.strip(),
+            descripcion=data.get("descripcion"),
+            fecha_propuesta=fecha_propuesta,
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+        )
+        return {"id_mantencion": id_mantencion}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear mantención: {str(e)}")
+
+
+@app.get("/mantenciones/")
+def listar_mantenciones_endpoint(
+    request: Request,
+    estado: str = Query(None, description="propuesto | confirmado | reprogramado | cancelado"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    payload = auth.obtener_payload(request)
+    rol = payload.get("rol")
+    id_usuario = payload.get("sub")
+
+    return mantenciones.listar_mantenciones(
+        rol=rol,
+        id_usuario=id_usuario,
+        estado=estado,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/mantenciones/{id_mantencion}")
+def obtener_mantencion_endpoint(id_mantencion: int, request: Request):
+    auth.obtener_payload(request)  # valida token
+    mantencion = mantenciones.obtener_mantencion(id_mantencion)
+    if not mantencion:
+        raise HTTPException(status_code=404, detail="Mantención no encontrada")
+    return mantencion
+
+
+@app.patch("/mantenciones/{id_mantencion}/estado")
+def actualizar_estado_mantencion_endpoint(id_mantencion: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+
+        nuevo_estado = data.get("nuevo_estado")
+        if not nuevo_estado:
+            raise HTTPException(status_code=400, detail="Se requiere el nuevo estado")
+
+        mantenciones.actualizar_estado_mantencion(
+            id_mantencion=id_mantencion,
+            nuevo_estado=nuevo_estado,
+            id_usuario=current_user["id_usuario"],
+            rol=current_user["rol"],
+            notas_soporte=data.get("notas_soporte"),
+        )
+
+        return {
+            "status": "actualizado",
+            "id_mantencion": id_mantencion,
+            "nuevo_estado": nuevo_estado,
+        }
+
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al actualizar estado: {str(e)}"
         )
