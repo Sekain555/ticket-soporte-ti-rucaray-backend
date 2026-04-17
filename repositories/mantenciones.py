@@ -1,5 +1,22 @@
 from database import get_connection
 from typing import Optional
+from datetime import timedelta
+
+
+def serializar_mantencion(m: dict) -> dict:
+    """Convierte campos no serializables (timedelta, date) a string."""
+    if not m:
+        return m
+    for campo in ('hora_inicio', 'hora_fin'):
+        if isinstance(m.get(campo), timedelta):
+            total = int(m[campo].total_seconds())
+            horas = total // 3600
+            minutos = (total % 3600) // 60
+            m[campo] = f"{horas:02d}:{minutos:02d}"
+    for campo in ('fecha_propuesta', 'fecha_creacion', 'fecha_actualizacion'):
+        if m.get(campo) is not None and not isinstance(m[campo], str):
+            m[campo] = str(m[campo])
+    return m
 
 
 # Crear una nueva mantención
@@ -89,7 +106,7 @@ def listar_mantenciones(
             base_sql + ' ORDER BY m.fecha_propuesta ASC, m.hora_inicio ASC LIMIT %s OFFSET %s',
             tuple(params) + (limit, offset),
         )
-        result = cursor.fetchall()
+        result = [serializar_mantencion(m) for m in cursor.fetchall()]
 
     except Exception as e:
         print('❌ Error listando mantenciones:', e)
@@ -126,7 +143,7 @@ def obtener_mantencion(id_mantencion: int):
         """,
         (id_mantencion,),
     )
-    mantencion = cursor.fetchone()
+    mantencion = serializar_mantencion(cursor.fetchone())
     cursor.close()
     conn.close()
     return mantencion
