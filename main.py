@@ -279,6 +279,8 @@ def crear_mantencion_endpoint(data: dict, request: Request):
 
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al crear mantención: {str(e)}")
 

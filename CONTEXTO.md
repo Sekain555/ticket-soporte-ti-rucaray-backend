@@ -203,6 +203,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Recálculo automático de SLA al cambiar categoría del ticket
 - Modelo de datos para Agenda de Mantenciones (tabla + repository + endpoints)
 - Serialización de campos TIME y DATE en mantenciones (función serializar_mantencion())
+- Control de conflictos de horario en mantenciones (validación fecha + hora, HTTP 409)
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol

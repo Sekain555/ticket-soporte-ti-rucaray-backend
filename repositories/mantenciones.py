@@ -31,6 +31,32 @@ def crear_mantencion(
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
+    # Validar conflicto de horario
+    # Traslape ocurre cuando: hora_inicio_nueva < hora_fin_existente
+    #                     AND hora_fin_nueva > hora_inicio_existente
+    cursor.execute(
+        """
+        SELECT id_mantencion, titulo, hora_inicio, hora_fin
+        FROM mantenciones
+        WHERE fecha_propuesta = %s
+          AND estado != 'cancelado'
+          AND %s < hora_fin
+          AND %s > hora_inicio
+        LIMIT 1
+        """,
+        (fecha_propuesta, hora_inicio, hora_fin),
+    )
+    conflicto = cursor.fetchone()
+    if conflicto:
+        conflicto = serializar_mantencion(conflicto)
+        cursor.close()
+        conn.close()
+        raise ValueError(
+            f"Conflicto de horario con la mantención #{conflicto['id_mantencion']} "
+            f"'{conflicto['titulo']}' "
+            f"({conflicto['hora_inicio']} - {conflicto['hora_fin']})"
+        )
+
     cursor.execute(
         """
         INSERT INTO mantenciones (
