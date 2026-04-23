@@ -204,6 +204,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Modelo de datos para Agenda de Mantenciones (tabla + repository + endpoints)
 - Serialización de campos TIME y DATE en mantenciones (función serializar_mantencion())
 - Control de conflictos de horario en mantenciones (validación fecha + hora, HTTP 409)
+- Feed de actividades en mantenciones (tabla mantencion_feed, registro automático, comentarios)
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol

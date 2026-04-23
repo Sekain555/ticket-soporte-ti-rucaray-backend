@@ -1,6 +1,7 @@
 from database import get_connection
 from typing import Optional
 from datetime import timedelta
+from repositories import mantencion_feed
 
 
 def serializar_mantencion(m: dict) -> dict:
@@ -32,8 +33,6 @@ def crear_mantencion(
     cursor = conn.cursor(dictionary=True)
 
     # Validar conflicto de horario
-    # Traslape ocurre cuando: hora_inicio_nueva < hora_fin_existente
-    #                     AND hora_fin_nueva > hora_inicio_existente
     cursor.execute(
         """
         SELECT id_mantencion, titulo, hora_inicio, hora_fin
@@ -73,6 +72,12 @@ def crear_mantencion(
     id_mantencion = cursor.lastrowid
     cursor.close()
     conn.close()
+
+    # Registrar en feed
+    mantencion_feed.agregar_evento(
+        id_mantencion, id_usuario_solicitante, 'creacion', 'Mantención creada'
+    )
+
     return id_mantencion
 
 
@@ -121,13 +126,11 @@ def listar_mantenciones(
             {where_sql}
         """
 
-        # Total
         count_sql = f"SELECT COUNT(*) AS total FROM mantenciones m {where_sql}"
         cursor.execute(count_sql, tuple(params) if params else None)
         row = cursor.fetchone()
         total = row['total'] if row else 0
 
-        # Listado paginado
         cursor.execute(
             base_sql + ' ORDER BY m.fecha_propuesta ASC, m.hora_inicio ASC LIMIT %s OFFSET %s',
             tuple(params) + (limit, offset),
@@ -194,13 +197,16 @@ def actualizar_estado_mantencion(
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
-        'SELECT id_mantencion FROM mantenciones WHERE id_mantencion = %s',
+        'SELECT estado FROM mantenciones WHERE id_mantencion = %s',
         (id_mantencion,)
     )
-    if not cursor.fetchone():
+    row = cursor.fetchone()
+    if not row:
         cursor.close()
         conn.close()
         raise ValueError(f'Mantención {id_mantencion} no encontrada')
+
+    estado_anterior = row['estado']
 
     cursor.execute(
         """
@@ -215,4 +221,11 @@ def actualizar_estado_mantencion(
     conn.commit()
     cursor.close()
     conn.close()
+
+    # Registrar en feed
+    detalle = f"Estado actualizado: {estado_anterior} → {nuevo_estado}"
+    if notas_soporte and notas_soporte.strip():
+        detalle += f" | {notas_soporte.strip()}"
+    mantencion_feed.agregar_evento(id_mantencion, id_usuario, 'cambio_estado', detalle)
+
     return True
