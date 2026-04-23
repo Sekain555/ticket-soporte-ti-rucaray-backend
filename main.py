@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from repositories import cambios_estado, ticket_feed, tickets, usuarios, mantenciones
+from repositories import cambios_estado, ticket_feed, tickets, usuarios, mantenciones, mantencion_feed
 from services import auth
 from version import __version__
 
@@ -346,3 +346,26 @@ def actualizar_estado_mantencion_endpoint(id_mantencion: int, data: dict, reques
             status_code=500,
             detail=f"Error al actualizar estado: {str(e)}"
         )
+    
+    # Feed de mantenciones
+@app.post("/mantenciones/{id_mantencion}/feed")
+def agregar_comentario_mantencion_endpoint(id_mantencion: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+        comentario = data.get("comentario", "").strip()
+        if not comentario:
+            raise HTTPException(status_code=400, detail="El comentario es obligatorio")
+        id_feed = mantencion_feed.agregar_evento(
+            id_mantencion, current_user["id_usuario"], "comentario", comentario
+        )
+        return {"id_feed": id_feed}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/mantenciones/{id_mantencion}/feed")
+def listar_feed_mantencion_endpoint(id_mantencion: int, request: Request):
+    auth.obtener_payload(request)
+    return mantencion_feed.listar_feed(id_mantencion)
