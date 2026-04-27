@@ -1,5 +1,32 @@
 # 📗 CHANGELOG — Backend (FastAPI / MySQL)
 
+## [1.2.0] — 2026-04-27
+
+### Added
+- Tabla `mantenciones` con campos `titulo`, `descripcion`, `id_usuario_solicitante`, `id_usuario_asignado`, `fecha_propuesta`, `hora_inicio`, `hora_fin`, `estado`, `notas_soporte`, `fecha_creacion`, `fecha_actualizacion`.
+- Tabla `mantencion_feed` para registro de actividades de cada mantención (`creacion`, `cambio_estado`, `reprogramacion`, `comentario`), con referencia a usuario y fecha.
+- Endpoints REST completos para mantenciones: `POST /mantenciones/`, `GET /mantenciones/`, `GET /mantenciones/{id}`, `PATCH /mantenciones/{id}/estado`, `PATCH /mantenciones/{id}/reprogramar`.
+- Endpoints de feed: `POST /mantenciones/{id}/feed`, `GET /mantenciones/{id}/feed`.
+- Validación de conflictos de horario al crear una mantención — retorna HTTP 409 con mensaje descriptivo que identifica la mantención en conflicto. Mantenciones canceladas no bloquean horarios.
+- Validación de conflictos de horario al reprogramar, excluyendo la mantención actual.
+- Registro automático en feed al crear (`Mantención agendada`), al cambiar estado (estado anterior → nuevo + notas) y al reprogramar (fecha/hora anterior → nueva + notas).
+- Función `serializar_mantencion()` que convierte campos `TIME` y `DATE` de MySQL (`timedelta`, `date`) a string antes de retornar.
+- Control de acceso por rol en todos los endpoints de mantenciones — admin/soporte ven todas, usuario solo las propias.
+- Repository `mantencion_feed.py` con funciones `agregar_evento()` y `listar_feed()`.
+
+### Changed
+- `actualizar_estado_mantencion()` ahora obtiene el estado anterior antes de actualizar para registrarlo correctamente en el feed.
+
+### Compatibility
+- Probado con Frontend `1.2.0`.
+
+### Notes
+- Release completo del grupo funcional **Agenda de Mantenciones**.
+- La acción "Reprogramar" cambia el estado a `reprogramado` automáticamente.
+- Los estados válidos de mantención son: `propuesto`, `confirmado`, `reprogramado`, `cancelado`.
+
+---
+
 ## [1.1.0] — 2026-03-24
 
 ### Added
@@ -91,6 +118,7 @@
 
 | Frontend | Backend | Estado | Fecha | Notas |
 |---|---|---|---|---|
+| 1.2.0 | 1.2.0 | ✅ Compatible | 2026-04-27 | Release grupo Agenda de Mantenciones |
 | 1.1.0 | 1.1.0 | ✅ Compatible | 2026-03-24 | Release grupo SLA |
 | 1.0.0 | 1.0.0 | ✅ Compatible | 2026-02-15 | Primera versión estable en producción |
 | 0.10.0-rc.1 | 0.9.0-beta.1 | ✅ Compatible | 2025-10-20 | Release conjunto en entorno de pruebas |
