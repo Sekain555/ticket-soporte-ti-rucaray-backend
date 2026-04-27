@@ -229,3 +229,88 @@ def actualizar_estado_mantencion(
     mantencion_feed.agregar_evento(id_mantencion, id_usuario, 'cambio_estado', detalle)
 
     return True
+
+# Reprogramar una mantención (solo admin/soporte)
+def reprogramar_mantencion(
+    id_mantencion: int,
+    nueva_fecha: str,
+    nueva_hora_inicio: str,
+    nueva_hora_fin: str,
+    id_usuario: int,
+    rol: str,
+    notas: Optional[str] = None,
+):
+    if rol not in ('admin', 'soporte'):
+        raise PermissionError('No autorizado')
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Obtener datos actuales
+    cursor.execute(
+        'SELECT fecha_propuesta, hora_inicio, hora_fin FROM mantenciones WHERE id_mantencion = %s',
+        (id_mantencion,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        conn.close()
+        raise ValueError(f'Mantención {id_mantencion} no encontrada')
+
+    fila_actual = serializar_mantencion(row)
+    fecha_anterior = fila_actual['fecha_propuesta']
+    hora_inicio_anterior = fila_actual['hora_inicio']
+    hora_fin_anterior = fila_actual['hora_fin']
+
+    # Validar conflicto excluyendo la mantención actual
+    cursor.execute(
+        """
+        SELECT id_mantencion, titulo, hora_inicio, hora_fin
+        FROM mantenciones
+        WHERE fecha_propuesta = %s
+          AND estado != 'cancelado'
+          AND id_mantencion != %s
+          AND %s < hora_fin
+          AND %s > hora_inicio
+        LIMIT 1
+        """,
+        (nueva_fecha, id_mantencion, nueva_hora_inicio, nueva_hora_fin),
+    )
+    conflicto = cursor.fetchone()
+    if conflicto:
+        conflicto = serializar_mantencion(conflicto)
+        cursor.close()
+        conn.close()
+        raise ValueError(
+            f"Conflicto de horario con la mantención #{conflicto['id_mantencion']} "
+            f"'{conflicto['titulo']}' "
+            f"({conflicto['hora_inicio']} - {conflicto['hora_fin']})"
+        )
+
+    cursor.execute(
+        """
+        UPDATE mantenciones
+        SET fecha_propuesta = %s,
+            hora_inicio = %s,
+            hora_fin = %s,
+            estado = 'reprogramado',
+            notas_soporte = COALESCE(%s, notas_soporte),
+            fecha_actualizacion = NOW()
+        WHERE id_mantencion = %s
+        """,
+        (nueva_fecha, nueva_hora_inicio, nueva_hora_fin, notas, id_mantencion),
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    # Registrar en feed
+    detalle = (
+        f"Reprogramado: {fecha_anterior} {hora_inicio_anterior}-{hora_fin_anterior} "
+        f"→ {nueva_fecha} {nueva_hora_inicio}-{nueva_hora_fin}"
+    )
+    if notas and notas.strip():
+        detalle += f" | {notas.strip()}"
+    mantencion_feed.agregar_evento(id_mantencion, id_usuario, 'reprogramacion', detalle)
+
+    return True
