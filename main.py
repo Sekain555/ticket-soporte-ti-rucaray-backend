@@ -369,3 +369,37 @@ def agregar_comentario_mantencion_endpoint(id_mantencion: int, data: dict, reque
 def listar_feed_mantencion_endpoint(id_mantencion: int, request: Request):
     auth.obtener_payload(request)
     return mantencion_feed.listar_feed(id_mantencion)
+
+@app.patch("/mantenciones/{id_mantencion}/reprogramar")
+def reprogramar_mantencion_endpoint(id_mantencion: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+
+        nueva_fecha = data.get("nueva_fecha")
+        nueva_hora_inicio = data.get("nueva_hora_inicio")
+        nueva_hora_fin = data.get("nueva_hora_fin")
+
+        if not nueva_fecha or not nueva_hora_inicio or not nueva_hora_fin:
+            raise HTTPException(
+                status_code=400,
+                detail="Se requieren nueva_fecha, nueva_hora_inicio y nueva_hora_fin"
+            )
+
+        mantenciones.reprogramar_mantencion(
+            id_mantencion=id_mantencion,
+            nueva_fecha=nueva_fecha,
+            nueva_hora_inicio=nueva_hora_inicio,
+            nueva_hora_fin=nueva_hora_fin,
+            id_usuario=current_user["id_usuario"],
+            rol=current_user["rol"],
+            notas=data.get("notas"),
+        )
+
+        return {"status": "reprogramado", "id_mantencion": id_mantencion}
+
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
