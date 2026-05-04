@@ -1,5 +1,25 @@
 # 📗 CHANGELOG — Backend (FastAPI / MySQL)
 
+## [1.3.0] — 2026-05-04
+
+### Added
+- Tabla `dispositivos` con 19 campos: `nombre_asignado`, `area`, `tipo_equipo`, `marca`, `procesador`, `ram`, `disco_duro`, `monitor`, `antivirus`, `rj45`, `tipo_lan`, `direccion_ip`, `mac_wifi`, `version_windows`, `tipo_office`, `nombre_equipo`, `dominio`, `observaciones`, `fecha_registro`, `fecha_actualizacion`.
+- Repository `dispositivos.py` con funciones `listar_dispositivos()` (filtros por tipo y área), `obtener_dispositivo()`, `crear_dispositivo()` y `actualizar_dispositivo()`.
+- Función `serializar_dispositivo()` que convierte campos `datetime` a string antes de retornar.
+- Endpoints REST: `GET /dispositivos/`, `GET /dispositivos/{id}`, `POST /dispositivos/`, `PATCH /dispositivos/{id}`.
+- Control de acceso por rol en creación y edición — solo `admin` y `soporte`.
+- 63 registros iniciales importados desde Excel de inventario Rucaray (PCs y Notebooks).
+
+### Compatibility
+- Probado con Frontend `1.3.0`.
+
+### Notes
+- Release completo del grupo funcional **Inventario de Dispositivos** (MVP).
+- Campos excluidos intencionalmente en esta versión: Anydesk, claves de equipo, fecha de mantención — pendientes de aprobación.
+- La siguiente iteración del módulo (`En dispositivos considerar programas y sistemas`) queda en backlog.
+
+---
+
 ## [1.2.0] — 2026-04-27
 
 ### Added
@@ -118,6 +138,7 @@
 
 | Frontend | Backend | Estado | Fecha | Notas |
 |---|---|---|---|---|
+| 1.3.0 | 1.3.0 | ✅ Compatible | 2026-04-29 | Release MVP Inventario de Dispositivos |
 | 1.2.0 | 1.2.0 | ✅ Compatible | 2026-04-27 | Release grupo Agenda de Mantenciones |
 | 1.1.0 | 1.1.0 | ✅ Compatible | 2026-03-24 | Release grupo SLA |
 | 1.0.0 | 1.0.0 | ✅ Compatible | 2026-02-15 | Primera versión estable en producción |
