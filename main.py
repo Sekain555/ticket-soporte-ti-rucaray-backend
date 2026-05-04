@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from repositories import cambios_estado, ticket_feed, tickets, usuarios, mantenciones, mantencion_feed
+from repositories import cambios_estado, ticket_feed, tickets, usuarios, mantenciones, mantencion_feed, dispositivos
 from services import auth
 from version import __version__
 
@@ -401,5 +401,59 @@ def reprogramar_mantencion_endpoint(id_mantencion: int, data: dict, request: Req
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# ============================================================
+# Dispositivos
+# ============================================================
+
+@app.get("/dispositivos/")
+def listar_dispositivos_endpoint(
+    request: Request,
+    tipo: str = Query(None, description="PC | Notebook"),
+    area: str = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    auth.obtener_payload(request)
+    return dispositivos.listar_dispositivos(tipo=tipo, area=area, limit=limit, offset=offset)
+
+
+@app.get("/dispositivos/{id_dispositivo}")
+def obtener_dispositivo_endpoint(id_dispositivo: int, request: Request):
+    auth.obtener_payload(request)
+    dispositivo = dispositivos.obtener_dispositivo(id_dispositivo)
+    if not dispositivo:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+    return dispositivo
+
+
+@app.post("/dispositivos/")
+def crear_dispositivo_endpoint(data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+        if current_user["rol"] not in ("admin", "soporte"):
+            raise HTTPException(status_code=403, detail="No autorizado")
+        id_dispositivo = dispositivos.crear_dispositivo(data)
+        return {"id_dispositivo": id_dispositivo}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/dispositivos/{id_dispositivo}")
+def actualizar_dispositivo_endpoint(id_dispositivo: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+        if current_user["rol"] not in ("admin", "soporte"):
+            raise HTTPException(status_code=403, detail="No autorizado")
+        dispositivos.actualizar_dispositivo(id_dispositivo, data)
+        return {"status": "actualizado", "id_dispositivo": id_dispositivo}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
