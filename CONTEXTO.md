@@ -206,12 +206,10 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Control de conflictos de horario en mantenciones (validación fecha + hora, HTTP 409)
 - Feed de actividades en mantenciones (tabla mantencion_feed, registro automático, comentarios)
 - Flujo de reprogramación con cambio de fecha/hora (formulario inline, validación de conflictos, feed)
+- Base de datos para dispositivos informáticos (tabla + importación + CRUD + grilla frontend)
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol
-
-### EN PROGRESO 🚧
-- (ninguna)
 
 ### BACKLOG (prioridad de arriba hacia abajo, según tablero Trello)
 Ver tablero para lista completa — los items de backend relevantes incluyen:
@@ -221,7 +219,6 @@ Ver tablero para lista completa — los items de backend relevantes incluyen:
 - Función de asignación de tickets
 - Reporte diario de trabajos
 - Horarios de disponibilidad de soporte
-- Base de datos para dispositivos informáticos
 
 ---
 
