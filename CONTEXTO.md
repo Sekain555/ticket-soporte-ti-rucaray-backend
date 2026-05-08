@@ -207,6 +207,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Feed de actividades en mantenciones (tabla mantencion_feed, registro automático, comentarios)
 - Flujo de reprogramación con cambio de fecha/hora (formulario inline, validación de conflictos, feed)
 - Base de datos para dispositivos informáticos (tabla + importación + CRUD + grilla frontend)
+- Redirección al login cuando expire la sesión (AuthGuard + AuthInterceptor + JWT 8h)
 
 ### EN REVISIÓN 🔄
 - Restricción de acciones por usuario/rol
