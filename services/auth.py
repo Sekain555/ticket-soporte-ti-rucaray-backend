@@ -1,5 +1,5 @@
 import jwt
-# import datetime
+import datetime
 from dotenv import load_dotenv
 from fastapi import Request, HTTPException, status, Depends
 import os
@@ -16,8 +16,8 @@ def crear_token(usuario: dict):
         "sub": str(usuario["id_usuario"]),  # id del usuario
         "usuario": usuario["usuario"],
         "rol": usuario["rol"],
-        # "exp": datetime.datetime.now(datetime.timezone.utc)
-        # + datetime.timedelta(hours=2),  # expira en 2 horas
+        "exp": datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(hours=8),  # expira en 8 horas
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token
@@ -25,7 +25,9 @@ def crear_token(usuario: dict):
 
 def verificar_token(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": True}
+        )
         return payload
     except Exception as e:
         print("Error al verificar token:", repr(e))
@@ -98,4 +100,5 @@ def role_required(roles_permitidos: list[str]):
                 detail=f"Acción no permitida para el rol '{rol_usuario}'",
             )
         return usuario
+
     return wrapper
