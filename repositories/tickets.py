@@ -138,14 +138,20 @@ def listar_tickets(
             )
             params.extend([search_term, search_term, search_term])
 
-        count_sql = "SELECT COUNT(*) AS total FROM tickets"
+        count_sql = "SELECT COUNT(*) AS total FROM tickets t JOIN usuarios u ON t.id_usuario = u.id_usuario"
         if where_clauses:
             count_sql += " WHERE " + " AND ".join(where_clauses)
         cursor.execute(count_sql, tuple(params) if params else None)
         row = cursor.fetchone()
         total = row["total"] if row and "total" in row else 0
 
-        base_sql = "SELECT * FROM tickets"
+        base_sql = """
+            SELECT t.*,
+                u.nombre AS nombre_usuario,
+                u.apellido AS apellido_usuario
+            FROM tickets t
+            JOIN usuarios u ON t.id_usuario = u.id_usuario
+        """
         if where_clauses:
             base_sql += " WHERE " + " AND ".join(where_clauses)
 
