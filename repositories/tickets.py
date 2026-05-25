@@ -43,9 +43,15 @@ def crear_ticket(
     cursor.execute(
         sql,
         (
-            id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo,
+            id_usuario,
+            titulo,
+            descripcion,
+            tipo_problema,
+            prioridad,
+            dispositivo,
             tiempo_objetivo_horas,
-            tiempo_objetivo_horas, tiempo_objetivo_horas,
+            tiempo_objetivo_horas,
+            tiempo_objetivo_horas,
         ),
     )
     conn.commit()
@@ -75,6 +81,7 @@ def listar_tickets(
     estado: Optional[str] = None,
     limit: int = 10,
     offset: int = 0,
+    search: Optional[str] = None,
 ):
     conn = None
     cursor = None
@@ -123,6 +130,13 @@ def listar_tickets(
             if db_estado:
                 where_clauses.append("estado = %s")
                 params.append(db_estado)
+
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            where_clauses.append(
+                "(titulo LIKE %s OR descripcion LIKE %s OR CAST(id_ticket AS CHAR) LIKE %s)"
+            )
+            params.extend([search_term, search_term, search_term])
 
         count_sql = "SELECT COUNT(*) AS total FROM tickets"
         if where_clauses:
@@ -187,7 +201,7 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
     # Obtener datos actuales del ticket
     cursor.execute(
         "SELECT estado, fecha_creacion, fecha_limite_resolucion FROM tickets WHERE id_ticket = %s",
-        (id_ticket,)
+        (id_ticket,),
     )
     ticket = cursor.fetchone()
     if not ticket:
@@ -245,17 +259,19 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
         else:
             cursor.execute(
                 "SELECT TIMESTAMPDIFF(SECOND, %s, %s) / 3600.0 AS horas",
-                (fecha_creacion, fecha_cierre)
+                (fecha_creacion, fecha_cierre),
             )
             tiempo_real_horas = cursor.fetchone()["horas"]
-            resultado_sla = "dentro_plazo" if fecha_cierre <= fecha_limite else "fuera_plazo"
+            resultado_sla = (
+                "dentro_plazo" if fecha_cierre <= fecha_limite else "fuera_plazo"
+            )
 
         cursor.execute(
             """
             INSERT INTO sla_cumplimiento (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado_sla)
+            (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado_sla),
         )
 
     conn.commit()
@@ -271,7 +287,10 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT tipo_problema, fecha_creacion FROM tickets WHERE id_ticket = %s", (id_ticket,))
+    cursor.execute(
+        "SELECT tipo_problema, fecha_creacion FROM tickets WHERE id_ticket = %s",
+        (id_ticket,),
+    )
     row = cursor.fetchone()
     if not row:
         cursor.close()
@@ -309,12 +328,16 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
         (
             nuevo_tipo_problema,
             tiempo_objetivo_horas,
-            tiempo_objetivo_horas, fecha_creacion, tiempo_objetivo_horas,
+            tiempo_objetivo_horas,
+            fecha_creacion,
+            tiempo_objetivo_horas,
             id_ticket,
         ),
     )
 
-    detalle_feed = f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
+    detalle_feed = (
+        f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
+    )
     cursor.execute(
         """
         INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)

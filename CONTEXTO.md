@@ -1,233 +1,202 @@
-# CONTEXTO — Sistema Tickets Rucaray (Backend)
+# CONTEXTO — Sistema Tickets Rucaray (Frontend)
 
 ## Stack tecnológico
 
 | Tecnología | Versión | Rol |
 |---|---|---|
-| Python | 3.10+ | Lenguaje principal |
-| FastAPI | Latest | Framework REST API |
-| Uvicorn | Latest | Servidor ASGI |
-| MySQL / MariaDB | Any | Base de datos relacional |
-| mysql-connector-python | Latest | Driver de base de datos |
-| PyJWT | Latest | Generación y validación de tokens JWT |
-| bcrypt | Latest | Hash de contraseñas |
-| python-dotenv | Latest | Variables de entorno desde `.env` |
+| Angular | 20.x | Framework principal SPA |
+| Ionic | 8.x | UI components responsivos |
+| TypeScript | 5.x | Lenguaje principal |
+| RxJS | 7.x | Programación reactiva (Observables) |
+| Angular Router | 20.x | Navegación con lazy loading |
+| Angular HttpClient | 20.x | Comunicación REST con el backend |
+| angular-calendar | Latest | Vista calendario en Agenda de Mantenciones |
+| date-fns | Latest | Utilidades de fecha requeridas por angular-calendar |
 
-**Versión actual:** `1.0.0`  
-**Compatibilidad frontend:** `1.0.0`
+**Versión actual:** `1.3.0`
+**Compatibilidad backend:** `1.3.0`
 
 ---
 
 ## Arquitectura
 
-Patrón Repository con separación en capas:
+SPA con arquitectura en capas:
 
-```
-main.py (API Gateway)
-├── services/
-│   └── auth.py          → Lógica JWT y autenticación
-└── repositories/
-    ├── tickets.py        → CRUD tickets + auditoría automática
-    ├── usuarios.py       → Gestión de usuarios
-    ├── ticket_feed.py    → Registro de actividades
-    ├── cambios_estado.py → Historial de cambios de estado
-    └── mantenciones.py → CRUD mantenciones
-```
+1. **Presentation Layer** — Page components (una página = un módulo lazy-loaded)
+2. **Shared Components** — `ComponentsModule` con componentes reutilizables (ej. `HeaderComponent`)
+3. **Service Layer** — Lógica de negocio e integración con API
+4. **Guards** — Protección de rutas por autenticación (`AuthGuard`)
+5. **Interceptors** — Manejo global de errores HTTP (`AuthInterceptor`)
+6. **Infrastructure** — `localStorage` para sesión, Service Worker para PWA
 
-Toda operación de BD pasa por los repositories. `main.py` orquesta endpoints y delega lógica.
+Todos los servicios son `providedIn: 'root'` (singletons globales).
 
 ---
 
-## Base de datos
+## Rutas principales
 
-**Nombre:** `sistema_tickets`
-
-| Tabla | Descripción |
-|---|---|
-| `tickets` | Información principal de tickets |
-| `usuarios` | Usuarios con contraseñas encriptadas |
-| `ticket_feed` | Registro de todas las actividades (comentarios, cambios) |
-| `cambios_estado` | Historial específico de transiciones de estado |
-| `sla_cumplimiento` | Registro de evaluación SLA por cada cierre de ticket |
-| `mantenciones` | Agenda de mantenciones con estados y asignación de técnico |
-
----
-
-## Modelos principales
-
-### Ticket
-| Campo | Tipo | Notas |
+| Ruta | Componente | Guard |
 |---|---|---|
-| `id_ticket` | INT PK | Auto-incremental |
-| `titulo` | VARCHAR | Obligatorio |
-| `descripcion` | TEXT | Obligatorio |
-| `tipo_problema` | VARCHAR(100) | Nombre descriptivo — debe coincidir con sla_tipos_problema.tipo_problema |
-| `prioridad` | VARCHAR | |
-| `dispositivo` | VARCHAR | |
-| `estado` | ENUM | `abierto`, `en_progreso`, `resuelto`, `cerrado` |
-| `id_usuario` | INT FK | Usuario que creó el ticket |
-| `fecha_creacion` | DATETIME | |
-| `tiempo_objetivo_horas` | INT | Horas máximas de resolución según SLA |
-| `fecha_limite_resolucion` | DATETIME | Calculada al crear: `fecha_creacion + tiempo_objetivo_horas` |
-
-### Usuario
-| Campo | Tipo | Notas |
-|---|---|---|
-| `id_usuario` | INT PK | |
-| `usuario` | VARCHAR | Username único |
-| `contrasena` | VARCHAR | Hash bcrypt con salt único |
-| `rol` | ENUM | `admin`, `soporte`, `usuario` |
-| `nombre` | VARCHAR | |
+| `/login` | `LoginPage` | ❌ |
+| `/panel-principal` | `PanelPrincipalPage` | ✅ AuthGuard |
+| `/nuevo-ticket` | `NuevoTicketPage` | ✅ AuthGuard |
+| `/mis-tickets` | `MisTicketsPage` | ✅ AuthGuard |
+| `/detalle-ticket/:id_ticket` | `DetalleTicketPage` | ✅ AuthGuard |
+| `/agenda-mantenimiento` | `AgendaMantenimientoPage` | ✅ AuthGuard |
+| `/programar-mantenimiento` | `ProgramarMantenimientoPage` | ✅ AuthGuard |
+| `/detalle-agenda-mant/:id_mantencion` | `DetalleAgendaMantPage` | ✅ AuthGuard |
+| `/listado-dispositivos` | `ListadoDispositivosPage` | ✅ AuthGuard |
+| `/detalle-dispositivo/:id_dispositivo` | `DetalleDispositivoPage` | ✅ AuthGuard |
 
 ---
 
-## Endpoints
+## Servicios core
 
-| Método | Endpoint | Auth | Descripción |
-|---|---|---|---|
-| GET | `/` | ❌ | Estado de la API |
-| GET | `/version` | ❌ | Versión actual |
-| POST | `/login` | ❌ | Autenticación → retorna JWT |
-| POST | `/usuarios` | ❌ | Crear usuario |
-| GET | `/usuarios` | ✅ | Listar usuarios |
-| POST | `/tickets/` | ✅ | Crear ticket (asigna SLA automáticamente) |
-| GET | `/tickets/` | ✅ | Listar tickets (filtrado por rol) |
-| GET | `/tickets/{id}` | ❌ | Obtener ticket específico |
-| PATCH | `/tickets/{id}/estado` | ✅ | Actualizar estado |
-| POST | `/tickets/{id}/feed` | ❌ | Agregar comentario al feed |
-| GET | `/tickets/{id}/feed` | ❌ | Listar feed del ticket |
-| POST | `/tickets/{id}/cambios-estado` | ❌ | Registrar cambio de estado |
-| GET | `/tickets/{id}/cambios-estado` | ❌ | Listar historial de estados |
-| POST | `/mantenciones/` | ✅ | Crear mantención |
-| GET | `/mantenciones/` | ✅ | Listar mantenciones (filtrado por rol) |
-| GET | `/mantenciones/{id}` | ✅ | Obtener mantención específica |
-| PATCH | `/mantenciones/{id}/estado` | ✅ | Actualizar estado (admin/soporte) |
+### AuthService
+- Autenticación usuario/contraseña contra el backend
+- Almacena en `localStorage`: token JWT, `id_usuario`, nombre, apellido, correo, usuario, rol, tema
+- `isLoggedIn()` verifica presencia de token
+- `logout()` limpia `localStorage`
 
----
+### TicketService
+- CRUD de tickets vía HTTP
+- Retorna Observables para integración reactiva
 
-## Autenticación
+### MantencionService
+- CRUD de mantenciones vía HTTP
+- Métodos: `crearMantencion()`, `listarMantenciones()`, `obtenerMantencionPorId()`, `actualizarEstadoMantencion()`, `reprogramarMantencion()`, `obtenerFeedMantencion()`, `agregarComentarioMantencion()`
 
-- **Algoritmo:** JWT HS256
-- **Expiración:** 2 horas
-- **Payload del token:** `{ sub: id_usuario, usuario: username, rol: rol }`
-- **Header requerido:** `Authorization: Bearer <token>`
-- **Contraseñas:** bcrypt con salt único por usuario
+### DispositivoService
+- CRUD de dispositivos informáticos vía HTTP
+- Métodos: `listarDispositivos()`, `obtenerDispositivoPorId()`, `crearDispositivo()`, `actualizarDispositivo()`
 
----
+### PermissionsService
+- Verifica permisos por rol para controlar elementos UI
+- Roles: `admin`, `soporte`, `usuario`
+- Lee rol desde `localStorage` dinámicamente
 
-## Control de acceso por rol
+### AuthGuard
+- Verifica `isLoggedIn()` antes de permitir navegación
+- Redirige a `/login` si no hay token
 
-| Rol | Acceso |
-|---|---|
-| `admin` | Todos los tickets, todas las operaciones |
-| `soporte` | Todos los tickets, todas las operaciones |
-| `usuario` | Solo sus propios tickets |
-
-El filtrado por rol se aplica en `repositories/tickets.py` → `listar_tickets()`.
+### AuthInterceptor
+- Intercepta todas las respuestas HTTP
+- Detecta error 401 → ejecuta `logout()` y redirige a `/login`
 
 ---
 
-## Auditoría automática
+## Sesión y autenticación
 
-Cada operación sobre un ticket genera registros automáticos:
-- `ticket_feed` → log de toda actividad (creación, comentarios, cambios)
-- `cambios_estado` → historial específico de transiciones de estado
-
-El log es atómico: `repositories/tickets.py` escribe en las 3 tablas en la misma operación.
-
----
-
-## SLA por tipo de problema
-
-Estructura que relaciona `tipo_problema` → `tiempo_objetivo_horas`. Al crear un ticket:
-1. Se detecta el `tipo_problema`
-2. Se busca el tiempo máximo correspondiente
-3. Se asigna `tiempo_objetivo_horas` y se calcula `fecha_limite_resolucion`
-
-Los tickets existentes no se modifican al cambiar la configuración de SLA.
+- Token JWT almacenado en `localStorage`
+- Expiración: 8 horas (manejada por el backend)
+- Guard bloquea navegación sin token
+- Interceptor expulsa al usuario cuando el token expira durante el uso
+- Datos de sesión: `token`, `id_usuario`, `nombre`, `apellido`, `correo`, `usuario`, `rol`, `tema`
 
 ---
 
-## Ciclo de vida del ticket
+## Flujo de usuario
 
 ```
-abierto → en_progreso → resuelto → cerrado
+/login → /panel-principal → /nuevo-ticket → (crear) → /detalle-ticket/:id
+                          → /mis-tickets → /detalle-ticket/:id
+                          → /agenda-mantenimiento → /programar-mantenimiento
+                                                  → /detalle-agenda-mant/:id
+                          → /listado-dispositivos → /detalle-dispositivo/:id
 ```
-
-Las transiciones son bidireccionales (ej. `resuelto` → `abierto` para reabrir).
 
 ---
 
-## Configuración
+## Módulos principales
 
-### Variables de entorno (`.env`)
+### Tickets
+- Listado con filtro por estado, ordenamiento y paginación
+- Creación con redirección automática al detalle tras crear
+- Detalle con feed de actividades, cambio de estado, categoría SLA editable
+- Semáforo SLA (verde/amarillo/rojo) en listado y detalle
+- Mensaje "Sin tickets" cuando no hay resultados
 
+### Agenda de Mantenciones
+- Vista Lista: filtro por período (Hoy/Semana/Mes) y estado, navegación ←→
+- Vista Calendario: vistas Mes/Semana con angular-calendar, eventos con color por estado
+- Switch Lista/Calendario con botones pill personalizados
+- Detalle con feed, formulario de reprogramación inline, acciones por rol
+
+### Inventario de Dispositivos
+- Grilla 6 columnas desktop / 3 móvil con iconos por tipo (PC/Notebook)
+- Filtro por tipo y búsqueda por área
+- Ordenamiento por nombre, área o IP
+- Detalle con formulario de edición inline para admin/soporte
+
+---
+
+## Convenciones de UI
+
+- **Filtros** — fuera de card, directamente sobre el contenido (patrón "Mis tickets")
+- **Switch de vistas** — botones pill personalizados (`.switch-pill` / `.pill-btn`)
+- **Avatares en feed** — `width: 32px; height: 32px` definido en SCSS del componente
+- **Cards del panel principal** — con sticker ilustrativo y navegación al módulo
+- **Detección de plataforma** — `ion-datetime` en móvil, `input` nativo en desktop para fechas/horas
+
+---
+
+## Conexión con backend
+
+URL base de la API (hardcodeada — pendiente mover a `environments/*.ts`):
 ```
-SECRET_KEY=...        # Clave simétrica para firmar JWT
-DB_HOST=...           # Host MySQL
-DB_USER=...           # Usuario BD
-DB_PASSWORD=...       # Contraseña BD
-DB_NAME=sistema_tickets
+http://127.0.0.1:8000
 ```
 
-### CORS — Orígenes permitidos
+---
 
-```
-http://localhost:8100
-http://127.0.0.1:8100
-http://192.168.4.195:8100
-http://192.168.4.246:2000
-```
+## PWA
 
-### Ejecución
-
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+- Configurada con `manifest.webmanifest` y service worker
+- **Estado:** base configurada, no declarada operativa en producción aún
 
 ---
 
 ## Estado del roadmap
 
 ### DONE ✅
-- Autenticación JWT + bcrypt
-- CRUD tickets con auditoría completa
-- Control de acceso por rol
-- Filtro, paginación y ordenamiento de tickets
-- Restricción de acciones por rol (en revisión frontend)
-- Definición de SLA por tipo de problema (integrado con frontend)
-- Definición de SLA por tipo de problema (tabla sla_tipos_problema)
-- Asignación automática de tiempo objetivo al crear ticket
-- Evaluación de cumplimiento SLA al cerrar ticket (tabla sla_cumplimiento)
-- Visualización de tiempo objetivo: obtener_ticket() retorna sla_tiempo_minimo_horas vía JOIN
-- Recálculo automático de SLA al cambiar categoría del ticket
-- Modelo de datos para Agenda de Mantenciones (tabla + repository + endpoints)
-- Serialización de campos TIME y DATE en mantenciones (función serializar_mantencion())
-- Control de conflictos de horario en mantenciones (validación fecha + hora, HTTP 409)
-- Feed de actividades en mantenciones (tabla mantencion_feed, registro automático, comentarios)
-- Flujo de reprogramación con cambio de fecha/hora (formulario inline, validación de conflictos, feed)
-- Base de datos para dispositivos informáticos (tabla + importación + CRUD + grilla frontend)
-- Redirección al login cuando expire la sesión (AuthGuard + AuthInterceptor + JWT 8h)
+- Autenticación con login
+- Flujo completo de tickets: listado, creación, detalle
+- Paginación, filtro y ordenamiento de tickets
+- Control de permisos por rol (PermissionsService)
+- SLA: tipos de problema, semáforo, toast diferenciado, visualización en detalle
+- Agenda de Mantenciones completa (Cards 1-7 + 3.1 + 3.2)
+- Inventario de Dispositivos Informáticos (MVP)
+- Fix: foto de perfil sobredimensionada en feed de mantenciones
+- Switch Lista/Calendario: mejora visual con botones pill
+- AuthGuard + AuthInterceptor para protección de sesión
+- Redirección al detalle al crear ticket
+- Mensaje "Sin tickets" si no hay resultados
+- Barra de búsqueda por términos en Mis tickets (título, descripción, N° ticket)
 
-### EN REVISIÓN 🔄
-- Restricción de acciones por usuario/rol
-
-### BACKLOG (prioridad de arriba hacia abajo, según tablero Trello)
-Ver tablero para lista completa — los items de backend relevantes incluyen:
-- Registro Histórico de Cumplimiento SLA
-- Cálculo Automático del KPI de Resolución TI
-- Exportación de Reporte KPI
+### BACKLOG (ver Trello para orden completo)
+- Unificación del flujo de acceso a tickets (Hub de Funciones)
+- Mostrar quién creó el ticket en el listado
+- Editar información de ticket (con control por rol)
+- Restringir campos obligatorios al crear ticket
+- Generar PDFs de reporte por ticket
 - Función de asignación de tickets
-- Reporte diario de trabajos
+- Etiquetar usuarios en comentarios @
+- Notificaciones: bandeja + sonido + recordatorio mantenciones
+- Funciones completas para "admin"
+- Histórico de acciones del usuario en su perfil
 - Horarios de disponibilidad de soporte
+- En dispositivos considerar programas y sistemas
+- Vista alternativa listado en dispositivos
+- KPI y Reportes SLA (múltiples cards)
+- Evaluaciones y solucionadores rápidos
+- Infraestructura: URL en environments, CORS en .env, endpoints sin auth, PWA, chat
 
 ---
 
 ## Pendientes técnicos conocidos
 
-- `GET /tickets/{id}` no requiere autenticación — evaluar si debe protegerse
-- Algunos endpoints de feed y cambios-estado no requieren auth — revisar según requerimientos de rol
-- CORS hardcodeado en `main.py` — considerar mover a `.env` para flexibilidad en despliegue
+- URL base del backend hardcodeada — pendiente mover a `environments/*.ts`
+- PWA operativa pendiente de activación formal en producción
 
 ---
 
@@ -235,11 +204,14 @@ Ver tablero para lista completa — los items de backend relevantes incluyen:
 
 | Decisión | Razón |
 |---|---|
-| Patrón Repository | Desacopla lógica de negocio del acceso a datos |
-| Auditoría atómica en repository | Garantiza consistencia sin lógica duplicada en endpoints |
-| JWT stateless | Evita almacenamiento de sesión en servidor |
-| bcrypt con salt único | Seguridad robusta de contraseñas |
-| FastAPI separado del frontend | Escalabilidad post-MVP, despliegue independiente |
+| Lazy loading por módulo | Optimiza bundle inicial y startup |
+| `ComponentsModule` compartido | Evita duplicación de componentes UI |
+| Servicios en root | Singleton global, evita múltiples instancias |
+| `localStorage` para sesión | Persistencia simple sin backend de sesión |
+| `PermissionsService` centralizado | Control de acceso uniforme en toda la UI |
+| AuthGuard + AuthInterceptor | Guard bloquea navegación; interceptor expulsa en 401 |
+| Filtrado por período 100% frontend | Sin llamadas extra al backend al navegar entre períodos |
+| Detección de plataforma para fechas | ion-datetime en móvil, input nativo en desktop |
 
 ---
 
@@ -248,5 +220,8 @@ Ver tablero para lista completa — los items de backend relevantes incluyen:
 - Rama principal de desarrollo: `dev`
 - Rama de producción: `main`
 - Flujo: `feature/nombre` → squash & merge a `dev`
-- Credenciales y `.env` en `.gitignore`
-- Rama `feature/agenda-mantenimiento` creada, en pausa
+- Angular actualizado a 20.x (requerido por angular-calendar)
+- angular-calendar + date-fns instalados como dependencias
+- Import CSS angular-calendar: `@import "../node_modules/angular-calendar/css/angular-calendar.css"` (ruta absoluta requerida)
+- `npm install` puede requerir `--legacy-peer-deps` por conflictos de versiones
+- Deepwiki disponible en `deepwiki.com/Sekain555/[repo]`
