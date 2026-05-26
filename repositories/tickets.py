@@ -356,3 +356,78 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
     cursor.close()
     conn.close()
     return True
+
+def editar_ticket(id_ticket: int, campos: dict, id_usuario: int, rol: str):
+    CAMPOS_ADMIN = {'titulo', 'descripcion', 'prioridad', 'dispositivo', 'tipo_problema'}
+    CAMPOS_USUARIO = {'titulo', 'descripcion', 'dispositivo'}
+
+    if rol in ('admin', 'soporte'):
+        campos_permitidos = CAMPOS_ADMIN
+    else:
+        campos_permitidos = CAMPOS_USUARIO
+
+    campos_validos = {k: v for k, v in campos.items() if k in campos_permitidos and v is not None}
+    if not campos_validos:
+        raise ValueError('No hay campos válidos para actualizar')
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        'SELECT titulo, descripcion, prioridad, dispositivo, tipo_problema, estado FROM tickets WHERE id_ticket = %s',
+        (id_ticket,)
+    )
+    ticket_actual = cursor.fetchone()
+    if not ticket_actual:
+        cursor.close()
+        conn.close()
+        raise ValueError(f'Ticket {id_ticket} no encontrado')
+
+    # Usuarios solo pueden editar tickets abiertos
+    if rol not in ('admin', 'soporte') and ticket_actual['estado'] != 'abierto':
+        raise PermissionError('Solo puedes editar tickets abiertos')
+
+    set_sql = ', '.join([f'{k} = %s' for k in campos_validos.keys()])
+    valores = list(campos_validos.values()) + [id_ticket]
+
+    cursor.execute(
+        f'UPDATE tickets SET {set_sql}, fecha_actualizacion = NOW() WHERE id_ticket = %s',
+        tuple(valores)
+    )
+
+    # Registrar en feed los cambios realizados
+    cambios = []
+    for campo, nuevo_valor in campos_validos.items():
+        valor_anterior = ticket_actual.get(campo)
+        if str(valor_anterior or '') != str(nuevo_valor or ''):
+            cambios.append(f'{campo}: {valor_anterior or "vacío"} → {nuevo_valor}')
+
+    if cambios:
+        detalle = 'Ticket editado | ' + ' | '.join(cambios)
+        cursor.execute(
+            'INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha) VALUES (%s, %s, %s, %s, NOW())',
+            (id_ticket, id_usuario, 'edicion', detalle)
+        )
+
+    # Si se cambió tipo_problema, recalcular SLA
+    if 'tipo_problema' in campos_validos:
+        nuevo_tipo = campos_validos['tipo_problema']
+        cursor.execute(
+            'SELECT tiempo_maximo_horas FROM sla_tipos_problema WHERE tipo_problema = %s AND activo = 1',
+            (nuevo_tipo,)
+        )
+        sla = cursor.fetchone()
+        tiempo_objetivo = sla['tiempo_maximo_horas'] if sla else None
+        
+        cursor.execute(
+            """UPDATE tickets SET tipo_problema = %s, tiempo_objetivo_horas = %s,
+               fecha_limite_resolucion = CASE WHEN %s IS NOT NULL
+               THEN DATE_ADD(fecha_creacion, INTERVAL %s HOUR) ELSE NULL END
+               WHERE id_ticket = %s""",
+            (nuevo_tipo, tiempo_objetivo, tiempo_objetivo, tiempo_objetivo, id_ticket)
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True

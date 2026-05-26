@@ -173,10 +173,10 @@ http://127.0.0.1:8000
 - Mensaje "Sin tickets" si no hay resultados
 - Barra de búsqueda por términos en Mis tickets (título, descripción, N° ticket)
 - Mostrar quién creó el ticket en el listado
+- Editar información de ticket con control por rol
 
 ### BACKLOG (ver Trello para orden completo)
 - Unificación del flujo de acceso a tickets (Hub de Funciones)
-- Editar información de ticket (con control por rol)
 - Restringir campos obligatorios al crear ticket
 - Generar PDFs de reporte por ticket
 - Función de asignación de tickets

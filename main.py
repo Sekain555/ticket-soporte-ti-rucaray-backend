@@ -252,6 +252,27 @@ def actualizar_tipo_problema_ticket_endpoint(
         raise HTTPException(
             status_code=500, detail=f"Error al actualizar tipo de problema: {str(e)}"
         )
+    
+@app.patch("/tickets/{id_ticket}")
+def editar_ticket_endpoint(id_ticket: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+        tickets.editar_ticket(
+            id_ticket=id_ticket,
+            campos=data,
+            id_usuario=current_user["id_usuario"],
+            rol=current_user["rol"],
+        )
+        ticket = tickets.obtener_ticket(id_ticket)
+        return ticket
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
