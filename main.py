@@ -89,17 +89,21 @@ def listar_usuarios_endpoint():
 # Crear tickets
 @app.post("/tickets/")
 def crear_ticket_endpoint(ticket: dict, request: Request):
-    current = auth.obtener_usuario_desde_request(request)
-    id_ticket = tickets.crear_ticket(
-        current["id_usuario"],
-        ticket["titulo"],
-        ticket["descripcion"],
-        ticket["prioridad"],
-        ticket.get("dispositivo"),
-        ticket.get("tipo_problema"),
-    )
-    return {"id_ticket": id_ticket}
-
+    try:
+        current = auth.obtener_usuario_desde_request(request)
+        id_ticket = tickets.crear_ticket(
+            current["id_usuario"],
+            ticket["titulo"],
+            ticket["descripcion"],
+            ticket["prioridad"],
+            ticket.get("dispositivo"),
+            ticket.get("tipo_problema"),
+        )
+        return {"id_ticket": id_ticket}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Listar tickets
 @app.get("/tickets/")
