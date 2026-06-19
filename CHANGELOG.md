@@ -1,5 +1,25 @@
 # 📗 CHANGELOG — Backend (FastAPI / MySQL)
 
+## [1.4.0] — 2026-06-18
+
+### Added
+- Función `editar_ticket()` en `tickets.py` con control de acceso por rol — admin/soporte editan título, descripción, prioridad, dispositivo y tipo de problema; usuarios solo editan título, descripción y dispositivo en tickets abiertos.
+- Endpoint `PATCH /tickets/{id_ticket}` para edición general de campos del ticket.
+- Registro automático en feed con detalle de cada campo modificado (valor anterior → nuevo).
+- Recálculo automático de SLA al cambiar tipo de problema desde edición.
+- Parámetro `search` en `GET /tickets/` — búsqueda con `LIKE` en título, descripción e ID.
+- JOIN a tabla `usuarios` en `listar_tickets()` — retorna `nombre_usuario` y `apellido_usuario` en el listado.
+- Validación de campos obligatorios en `crear_ticket()` — título, descripción y prioridad con `ValueError` → HTTP 400.
+
+### Compatibility
+- Probado con Frontend `1.5.0`.
+
+### Notes
+- Release completo de la **Sección 2 — Gestión y Búsqueda de Tickets**.
+- El endpoint `PATCH /tickets/{id_ticket}` debe ir después de los endpoints específicos (`/estado`, `/tipo-problema`) en `main.py` para evitar conflictos de routing.
+
+---
+
 ## [1.3.0] — 2026-05-04
 
 ### Added
@@ -138,6 +158,8 @@
 
 | Frontend | Backend | Estado | Fecha | Notas |
 |---|---|---|---|---|
+| 1.5.0 | 1.4.0 | ✅ Compatible | 2026-06-18 | Release Gestión y Búsqueda |
+| 1.4.0 | 1.3.0 | ✅ Compatible | 2026-05-10 | Release Mejoras UX y Flujo |
 | 1.3.0 | 1.3.0 | ✅ Compatible | 2026-04-29 | Release MVP Inventario de Dispositivos |
 | 1.2.0 | 1.2.0 | ✅ Compatible | 2026-04-27 | Release grupo Agenda de Mantenciones |
 | 1.1.0 | 1.1.0 | ✅ Compatible | 2026-03-24 | Release grupo SLA |

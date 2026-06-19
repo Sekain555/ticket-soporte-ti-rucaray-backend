@@ -1,6 +1,14 @@
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from repositories import cambios_estado, ticket_feed, tickets, usuarios, mantenciones, mantencion_feed, dispositivos
+from repositories import (
+    cambios_estado,
+    ticket_feed,
+    tickets,
+    usuarios,
+    mantenciones,
+    mantencion_feed,
+    dispositivos,
+)
 from services import auth
 from version import __version__
 
@@ -81,17 +89,21 @@ def listar_usuarios_endpoint():
 # Crear tickets
 @app.post("/tickets/")
 def crear_ticket_endpoint(ticket: dict, request: Request):
-    current = auth.obtener_usuario_desde_request(request)
-    id_ticket = tickets.crear_ticket(
-        current["id_usuario"],
-        ticket["titulo"],
-        ticket["descripcion"],
-        ticket["prioridad"],
-        ticket.get("dispositivo"),
-        ticket.get("tipo_problema"),
-    )
-    return {"id_ticket": id_ticket}
-
+    try:
+        current = auth.obtener_usuario_desde_request(request)
+        id_ticket = tickets.crear_ticket(
+            current["id_usuario"],
+            ticket["titulo"],
+            ticket["descripcion"],
+            ticket["prioridad"],
+            ticket.get("dispositivo"),
+            ticket.get("tipo_problema"),
+        )
+        return {"id_ticket": id_ticket}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Listar tickets
 @app.get("/tickets/")
@@ -108,6 +120,7 @@ def listar_tickets_endpoint(
     offset: int = Query(
         0, ge=0, description="Desplazamiento para paginación (default 0)"
     ),
+    search: str = Query(None, description="Búsqueda por título, descripción o ID"),
 ):
     payload = auth.obtener_payload(request)
     rol = payload.get("rol")
@@ -126,6 +139,7 @@ def listar_tickets_endpoint(
         sort_by=sort_by,
         order=order,
         estado=estado_param,
+        search=search,
         limit=limit,
         offset=offset,
     )
@@ -209,15 +223,16 @@ def listar_cambios_estado_endpoint(id_ticket: int):
 
 
 @app.patch("/tickets/{id_ticket}/tipo-problema")
-def actualizar_tipo_problema_ticket_endpoint(id_ticket: int, data: dict, request: Request):
+def actualizar_tipo_problema_ticket_endpoint(
+    id_ticket: int, data: dict, request: Request
+):
     try:
         current_user = auth.obtener_usuario_desde_request(request)
 
         nuevo_tipo_problema = data.get("tipo_problema")
         if not nuevo_tipo_problema:
             raise HTTPException(
-                status_code=400,
-                detail="Se requiere el tipo de problema"
+                status_code=400, detail="Se requiere el tipo de problema"
             )
 
         tickets.actualizar_tipo_problema_ticket(
@@ -239,14 +254,35 @@ def actualizar_tipo_problema_ticket_endpoint(id_ticket: int, data: dict, request
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error al actualizar tipo de problema: {str(e)}"
+            status_code=500, detail=f"Error al actualizar tipo de problema: {str(e)}"
         )
+    
+@app.patch("/tickets/{id_ticket}")
+def editar_ticket_endpoint(id_ticket: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+        tickets.editar_ticket(
+            id_ticket=id_ticket,
+            campos=data,
+            id_usuario=current_user["id_usuario"],
+            rol=current_user["rol"],
+        )
+        ticket = tickets.obtener_ticket(id_ticket)
+        return ticket
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
 # Mantenciones
 # ============================================================
+
 
 @app.post("/mantenciones/")
 def crear_mantencion_endpoint(data: dict, request: Request):
@@ -264,7 +300,7 @@ def crear_mantencion_endpoint(data: dict, request: Request):
         if not fecha_propuesta or not hora_inicio or not hora_fin:
             raise HTTPException(
                 status_code=400,
-                detail="Se requieren fecha_propuesta, hora_inicio y hora_fin"
+                detail="Se requieren fecha_propuesta, hora_inicio y hora_fin",
             )
 
         id_mantencion = mantenciones.crear_mantencion(
@@ -282,13 +318,17 @@ def crear_mantencion_endpoint(data: dict, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al crear mantención: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al crear mantención: {str(e)}"
+        )
 
 
 @app.get("/mantenciones/")
 def listar_mantenciones_endpoint(
     request: Request,
-    estado: str = Query(None, description="propuesto | confirmado | reprogramado | cancelado"),
+    estado: str = Query(
+        None, description="propuesto | confirmado | reprogramado | cancelado"
+    ),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -315,7 +355,9 @@ def obtener_mantencion_endpoint(id_mantencion: int, request: Request):
 
 
 @app.patch("/mantenciones/{id_mantencion}/estado")
-def actualizar_estado_mantencion_endpoint(id_mantencion: int, data: dict, request: Request):
+def actualizar_estado_mantencion_endpoint(
+    id_mantencion: int, data: dict, request: Request
+):
     try:
         current_user = auth.obtener_usuario_desde_request(request)
 
@@ -343,13 +385,16 @@ def actualizar_estado_mantencion_endpoint(id_mantencion: int, data: dict, reques
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error al actualizar estado: {str(e)}"
+            status_code=500, detail=f"Error al actualizar estado: {str(e)}"
         )
-    
+
     # Feed de mantenciones
+
+
 @app.post("/mantenciones/{id_mantencion}/feed")
-def agregar_comentario_mantencion_endpoint(id_mantencion: int, data: dict, request: Request):
+def agregar_comentario_mantencion_endpoint(
+    id_mantencion: int, data: dict, request: Request
+):
     try:
         current_user = auth.obtener_usuario_desde_request(request)
         comentario = data.get("comentario", "").strip()
@@ -370,6 +415,7 @@ def listar_feed_mantencion_endpoint(id_mantencion: int, request: Request):
     auth.obtener_payload(request)
     return mantencion_feed.listar_feed(id_mantencion)
 
+
 @app.patch("/mantenciones/{id_mantencion}/reprogramar")
 def reprogramar_mantencion_endpoint(id_mantencion: int, data: dict, request: Request):
     try:
@@ -382,7 +428,7 @@ def reprogramar_mantencion_endpoint(id_mantencion: int, data: dict, request: Req
         if not nueva_fecha or not nueva_hora_inicio or not nueva_hora_fin:
             raise HTTPException(
                 status_code=400,
-                detail="Se requieren nueva_fecha, nueva_hora_inicio y nueva_hora_fin"
+                detail="Se requieren nueva_fecha, nueva_hora_inicio y nueva_hora_fin",
             )
 
         mantenciones.reprogramar_mantencion(
@@ -403,10 +449,12 @@ def reprogramar_mantencion_endpoint(id_mantencion: int, data: dict, request: Req
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 # ============================================================
 # Dispositivos
 # ============================================================
+
 
 @app.get("/dispositivos/")
 def listar_dispositivos_endpoint(
@@ -417,7 +465,9 @@ def listar_dispositivos_endpoint(
     offset: int = Query(0, ge=0),
 ):
     auth.obtener_payload(request)
-    return dispositivos.listar_dispositivos(tipo=tipo, area=area, limit=limit, offset=offset)
+    return dispositivos.listar_dispositivos(
+        tipo=tipo, area=area, limit=limit, offset=offset
+    )
 
 
 @app.get("/dispositivos/{id_dispositivo}")

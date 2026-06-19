@@ -7,6 +7,13 @@ from typing import Optional
 def crear_ticket(
     id_usuario, titulo, descripcion, prioridad, dispositivo=None, tipo_problema=None
 ):
+    if not titulo or not titulo.strip():
+        raise ValueError("El título es obligatorio")
+    if not descripcion or not descripcion.strip():
+        raise ValueError("La descripción es obligatoria")
+    if not prioridad or not prioridad.strip():
+        raise ValueError("La prioridad es obligatoria")
+
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -43,9 +50,15 @@ def crear_ticket(
     cursor.execute(
         sql,
         (
-            id_usuario, titulo, descripcion, tipo_problema, prioridad, dispositivo,
+            id_usuario,
+            titulo,
+            descripcion,
+            tipo_problema,
+            prioridad,
+            dispositivo,
             tiempo_objetivo_horas,
-            tiempo_objetivo_horas, tiempo_objetivo_horas,
+            tiempo_objetivo_horas,
+            tiempo_objetivo_horas,
         ),
     )
     conn.commit()
@@ -75,6 +88,7 @@ def listar_tickets(
     estado: Optional[str] = None,
     limit: int = 10,
     offset: int = 0,
+    search: Optional[str] = None,
 ):
     conn = None
     cursor = None
@@ -124,14 +138,27 @@ def listar_tickets(
                 where_clauses.append("estado = %s")
                 params.append(db_estado)
 
-        count_sql = "SELECT COUNT(*) AS total FROM tickets"
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            where_clauses.append(
+                "(titulo LIKE %s OR descripcion LIKE %s OR CAST(id_ticket AS CHAR) LIKE %s)"
+            )
+            params.extend([search_term, search_term, search_term])
+
+        count_sql = "SELECT COUNT(*) AS total FROM tickets t JOIN usuarios u ON t.id_usuario = u.id_usuario"
         if where_clauses:
             count_sql += " WHERE " + " AND ".join(where_clauses)
         cursor.execute(count_sql, tuple(params) if params else None)
         row = cursor.fetchone()
         total = row["total"] if row and "total" in row else 0
 
-        base_sql = "SELECT * FROM tickets"
+        base_sql = """
+            SELECT t.*,
+                u.nombre AS nombre_usuario,
+                u.apellido AS apellido_usuario
+            FROM tickets t
+            JOIN usuarios u ON t.id_usuario = u.id_usuario
+        """
         if where_clauses:
             base_sql += " WHERE " + " AND ".join(where_clauses)
 
@@ -187,7 +214,7 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
     # Obtener datos actuales del ticket
     cursor.execute(
         "SELECT estado, fecha_creacion, fecha_limite_resolucion FROM tickets WHERE id_ticket = %s",
-        (id_ticket,)
+        (id_ticket,),
     )
     ticket = cursor.fetchone()
     if not ticket:
@@ -245,17 +272,19 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
         else:
             cursor.execute(
                 "SELECT TIMESTAMPDIFF(SECOND, %s, %s) / 3600.0 AS horas",
-                (fecha_creacion, fecha_cierre)
+                (fecha_creacion, fecha_cierre),
             )
             tiempo_real_horas = cursor.fetchone()["horas"]
-            resultado_sla = "dentro_plazo" if fecha_cierre <= fecha_limite else "fuera_plazo"
+            resultado_sla = (
+                "dentro_plazo" if fecha_cierre <= fecha_limite else "fuera_plazo"
+            )
 
         cursor.execute(
             """
             INSERT INTO sla_cumplimiento (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado_sla)
+            (id_ticket, fecha_cierre, fecha_limite, tiempo_real_horas, resultado_sla),
         )
 
     conn.commit()
@@ -271,7 +300,10 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT tipo_problema, fecha_creacion FROM tickets WHERE id_ticket = %s", (id_ticket,))
+    cursor.execute(
+        "SELECT tipo_problema, fecha_creacion FROM tickets WHERE id_ticket = %s",
+        (id_ticket,),
+    )
     row = cursor.fetchone()
     if not row:
         cursor.close()
@@ -309,12 +341,16 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
         (
             nuevo_tipo_problema,
             tiempo_objetivo_horas,
-            tiempo_objetivo_horas, fecha_creacion, tiempo_objetivo_horas,
+            tiempo_objetivo_horas,
+            fecha_creacion,
+            tiempo_objetivo_horas,
             id_ticket,
         ),
     )
 
-    detalle_feed = f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
+    detalle_feed = (
+        f"Categoría actualizada: {tipo_anterior or 'pendiente'} → {nuevo_tipo_problema}"
+    )
     cursor.execute(
         """
         INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha)
@@ -322,6 +358,90 @@ def actualizar_tipo_problema_ticket(id_ticket, nuevo_tipo_problema, id_usuario, 
         """,
         (id_ticket, id_usuario, "cambio_categoria", detalle_feed),
     )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True
+
+
+def editar_ticket(id_ticket: int, campos: dict, id_usuario: int, rol: str):
+    CAMPOS_ADMIN = {
+        "titulo",
+        "descripcion",
+        "prioridad",
+        "dispositivo",
+        "tipo_problema",
+    }
+    CAMPOS_USUARIO = {"titulo", "descripcion", "dispositivo"}
+
+    if rol in ("admin", "soporte"):
+        campos_permitidos = CAMPOS_ADMIN
+    else:
+        campos_permitidos = CAMPOS_USUARIO
+
+    campos_validos = {
+        k: v for k, v in campos.items() if k in campos_permitidos and v is not None
+    }
+    if not campos_validos:
+        raise ValueError("No hay campos válidos para actualizar")
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT titulo, descripcion, prioridad, dispositivo, tipo_problema, estado FROM tickets WHERE id_ticket = %s",
+        (id_ticket,),
+    )
+    ticket_actual = cursor.fetchone()
+    if not ticket_actual:
+        cursor.close()
+        conn.close()
+        raise ValueError(f"Ticket {id_ticket} no encontrado")
+
+    # Usuarios solo pueden editar tickets abiertos
+    if rol not in ("admin", "soporte") and ticket_actual["estado"] != "abierto":
+        raise PermissionError("Solo puedes editar tickets abiertos")
+
+    set_sql = ", ".join([f"{k} = %s" for k in campos_validos.keys()])
+    valores = list(campos_validos.values()) + [id_ticket]
+
+    cursor.execute(
+        f"UPDATE tickets SET {set_sql}, fecha_actualizacion = NOW() WHERE id_ticket = %s",
+        tuple(valores),
+    )
+
+    # Registrar en feed los cambios realizados
+    cambios = []
+    for campo, nuevo_valor in campos_validos.items():
+        valor_anterior = ticket_actual.get(campo)
+        if str(valor_anterior or "") != str(nuevo_valor or ""):
+            cambios.append(f'{campo}: {valor_anterior or "vacío"} → {nuevo_valor}')
+
+    if cambios:
+        detalle = "Ticket editado | " + " | ".join(cambios)
+        cursor.execute(
+            "INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha) VALUES (%s, %s, %s, %s, NOW())",
+            (id_ticket, id_usuario, "edicion", detalle),
+        )
+
+    # Si se cambió tipo_problema, recalcular SLA
+    if "tipo_problema" in campos_validos:
+        nuevo_tipo = campos_validos["tipo_problema"]
+        cursor.execute(
+            "SELECT tiempo_maximo_horas FROM sla_tipos_problema WHERE tipo_problema = %s AND activo = 1",
+            (nuevo_tipo,),
+        )
+        sla = cursor.fetchone()
+        tiempo_objetivo = sla["tiempo_maximo_horas"] if sla else None
+
+        cursor.execute(
+            """UPDATE tickets SET tipo_problema = %s, tiempo_objetivo_horas = %s,
+               fecha_limite_resolucion = CASE WHEN %s IS NOT NULL
+               THEN DATE_ADD(fecha_creacion, INTERVAL %s HOUR) ELSE NULL END
+               WHERE id_ticket = %s""",
+            (nuevo_tipo, tiempo_objetivo, tiempo_objetivo, tiempo_objetivo, id_ticket),
+        )
 
     conn.commit()
     cursor.close()
