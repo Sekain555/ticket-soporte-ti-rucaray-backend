@@ -290,6 +290,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Flujo de reprogramación con cambio de fecha/hora
 - Base de datos para dispositivos informáticos (tabla + importación + CRUD)
 - Expiración de token JWT a 8 horas
+- Función de asignación de tickets con control por rol
 
 ### BACKLOG
 - Proteger endpoints sin autenticación (`GET /tickets/{id}`, feed, cambios-estado)
@@ -297,7 +298,6 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Registro Histórico de Cumplimiento SLA
 - Cálculo Automático del KPI de Resolución TI
 - Exportación de Reporte KPI
-- Función de asignación de tickets
 - Reporte diario de trabajos
 - Horarios de disponibilidad de soporte
 

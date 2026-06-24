@@ -193,10 +193,13 @@ def obtener_ticket(id_ticket):
         u.apellido AS apellido_usuario,
         u.departamento AS departamento_usuario,
         u.puesto AS puesto_usuario,
-        s.tiempo_minimo_horas AS sla_tiempo_minimo_horas
+        s.tiempo_minimo_horas AS sla_tiempo_minimo_horas,
+        a.nombre AS nombre_asignado,
+        a.apellido AS apellido_asignado
     FROM tickets t
     JOIN usuarios u ON t.id_usuario = u.id_usuario
     LEFT JOIN sla_tipos_problema s ON t.tipo_problema = s.tipo_problema AND s.activo = 1
+    LEFT JOIN usuarios a ON t.id_asignado = a.id_usuario
     WHERE t.id_ticket = %s
     """
     cursor.execute(sql, (id_ticket,))
@@ -442,6 +445,62 @@ def editar_ticket(id_ticket: int, campos: dict, id_usuario: int, rol: str):
                WHERE id_ticket = %s""",
             (nuevo_tipo, tiempo_objetivo, tiempo_objetivo, tiempo_objetivo, id_ticket),
         )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True
+
+def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, rol: str, comentario: str = None):
+    if rol not in ("admin", "soporte"):
+        raise PermissionError("No autorizado para asignar tickets")
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Verificar que el ticket existe
+    cursor.execute(
+        "SELECT id_ticket, id_asignado FROM tickets WHERE id_ticket = %s",
+        (id_ticket,)
+    )
+    ticket = cursor.fetchone()
+    if not ticket:
+        cursor.close()
+        conn.close()
+        raise ValueError(f"Ticket {id_ticket} no encontrado")
+
+    # Soporte solo puede asignarse a sí mismo
+    if rol == "soporte" and id_asignado != id_usuario:
+        cursor.close()
+        conn.close()
+        raise PermissionError("Soporte solo puede asignarse a sí mismo")
+
+    # Obtener nombre del técnico asignado para el feed
+    nombre_asignado = "Sin asignar"
+    if id_asignado:
+        cursor.execute(
+            "SELECT nombre, apellido FROM usuarios WHERE id_usuario = %s",
+            (id_asignado,)
+        )
+        tecnico = cursor.fetchone()
+        if tecnico:
+            nombre_asignado = f"{tecnico['nombre']} {tecnico['apellido']}"
+
+    # Actualizar asignación
+    cursor.execute(
+        "UPDATE tickets SET id_asignado = %s, fecha_actualizacion = NOW() WHERE id_ticket = %s",
+        (id_asignado, id_ticket)
+    )
+
+    # Registrar en feed
+    detalle = f"Ticket asignado a: {nombre_asignado}"
+    if comentario and comentario.strip():
+        detalle += f" | {comentario.strip()}"
+
+    cursor.execute(
+        "INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha) VALUES (%s, %s, %s, %s, NOW())",
+        (id_ticket, id_usuario, "asignacion", detalle)
+    )
 
     conn.commit()
     cursor.close()
