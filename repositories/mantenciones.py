@@ -2,6 +2,7 @@ from database import get_connection
 from typing import Optional
 from datetime import timedelta
 from repositories import mantencion_feed
+from repositories import notificaciones as notif_repo
 
 
 def serializar_mantencion(m: dict) -> dict:
@@ -70,12 +71,23 @@ def crear_mantencion(
     )
     conn.commit()
     id_mantencion = cursor.lastrowid
+
+    # Obtener tecnicos para notificar
+    cursor.execute("SELECT id_usuario FROM usuarios WHERE rol IN ('admin', 'soporte')")
+    tecnicos = [r['id_usuario'] for r in cursor.fetchall()]
+
     cursor.close()
     conn.close()
 
     # Registrar en feed
     mantencion_feed.agregar_evento(
         id_mantencion, id_usuario_solicitante, 'creacion', 'Mantención creada'
+    )
+
+    notif_repo.notificar_usuarios(
+        tecnicos, 'mantencion_creada',
+        f"Nueva mantención agendada: {titulo}",
+        referencia_id=id_mantencion, referencia_tipo='mantencion'
     )
 
     return id_mantencion
@@ -197,7 +209,7 @@ def actualizar_estado_mantencion(
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
-        'SELECT estado FROM mantenciones WHERE id_mantencion = %s',
+        'SELECT estado, id_usuario_solicitante FROM mantenciones WHERE id_mantencion = %s',
         (id_mantencion,)
     )
     row = cursor.fetchone()
@@ -218,7 +230,18 @@ def actualizar_estado_mantencion(
         """,
         (nuevo_estado, notas_soporte, id_mantencion),
     )
+
+    id_solicitante = row['id_usuario_solicitante']
+
     conn.commit()
+
+    if id_solicitante != id_usuario:
+        notif_repo.crear_notificacion(
+            id_solicitante, 'mantencion_actualizada',
+            f"Tu mantención #{id_mantencion} cambió a: {nuevo_estado}",
+            referencia_id=id_mantencion, referencia_tipo='mantencion'
+        )
+
     cursor.close()
     conn.close()
 
@@ -248,7 +271,7 @@ def reprogramar_mantencion(
 
     # Obtener datos actuales
     cursor.execute(
-        'SELECT fecha_propuesta, hora_inicio, hora_fin FROM mantenciones WHERE id_mantencion = %s',
+        'SELECT fecha_propuesta, hora_inicio, hora_fin, id_usuario_solicitante FROM mantenciones WHERE id_mantencion = %s',
         (id_mantencion,)
     )
     row = cursor.fetchone()
@@ -261,6 +284,7 @@ def reprogramar_mantencion(
     fecha_anterior = fila_actual['fecha_propuesta']
     hora_inicio_anterior = fila_actual['hora_inicio']
     hora_fin_anterior = fila_actual['hora_fin']
+    id_solicitante = row['id_usuario_solicitante']
 
     # Validar conflicto excluyendo la mantención actual
     cursor.execute(
@@ -301,6 +325,14 @@ def reprogramar_mantencion(
         (nueva_fecha, nueva_hora_inicio, nueva_hora_fin, notas, id_mantencion),
     )
     conn.commit()
+
+    if id_solicitante != id_usuario:
+        notif_repo.crear_notificacion(
+            id_solicitante, 'mantencion_reprogramada',
+            f"Tu mantención #{id_mantencion} ha sido reprogramada",
+            referencia_id=id_mantencion, referencia_tipo='mantencion'
+        )
+
     cursor.close()
     conn.close()
 
