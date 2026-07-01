@@ -291,6 +291,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Base de datos para dispositivos informáticos (tabla + importación + CRUD)
 - Expiración de token JWT a 8 horas
 - Función de asignación de tickets con control por rol
+- Notificaciones in-app (polling + BD + campana + badge + popover + sonido)
 
 ### BACKLOG
 - Proteger endpoints sin autenticación (`GET /tickets/{id}`, feed, cambios-estado)

@@ -1,5 +1,6 @@
 from database import get_connection
 from typing import Optional
+from repositories import notificaciones as notif_repo
 
 
 def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str):
@@ -13,10 +14,30 @@ def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str)
         """,
         (id_mantencion, id_usuario, tipo, detalle),
     )
+
+    # Obtener destinatarios de la mantención
+    cursor.execute(
+        "SELECT id_usuario_solicitante, id_usuario_asignado FROM mantenciones WHERE id_mantencion = %s",
+        (id_mantencion,)
+    )
+    mantencion = cursor.fetchone()
+
     conn.commit()
     id_feed = cursor.lastrowid
     cursor.close()
     conn.close()
+
+    # Notificar solo si es comentario
+    if tipo == 'comentario' and mantencion:
+        destinatarios = list(
+            {mantencion['id_usuario_solicitante'], mantencion.get('id_usuario_asignado')} - {None, id_usuario}
+        )
+        notif_repo.notificar_usuarios(
+            destinatarios, 'comentario_mantencion',
+            f"Nuevo comentario en mantención #{id_mantencion}",
+            referencia_id=id_mantencion, referencia_tipo='mantencion'
+        )
+
     return id_feed
 
 

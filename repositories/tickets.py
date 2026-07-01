@@ -1,6 +1,7 @@
 from database import get_connection
 from repositories.ticket_feed import agregar_comentario
 from typing import Optional
+from repositories import notificaciones as notif_repo
 
 
 # Crear un nuevo ticket
@@ -74,8 +75,19 @@ def crear_ticket(
     )
     conn.commit()
 
+    # Obtener tecnicos para notificar
+    cursor.execute("SELECT id_usuario FROM usuarios WHERE rol IN ('admin', 'soporte')")
+    tecnicos = [r['id_usuario'] for r in cursor.fetchall()]
+
     cursor.close()
     conn.close()
+
+    notif_repo.notificar_usuarios(
+        tecnicos, 'ticket_creado',
+        f"Nuevo ticket #{id_ticket}: {titulo}",
+        referencia_id=id_ticket, referencia_tipo='ticket'
+    )
+    
     return id_ticket
 
 
@@ -216,7 +228,7 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
 
     # Obtener datos actuales del ticket
     cursor.execute(
-        "SELECT estado, fecha_creacion, fecha_limite_resolucion FROM tickets WHERE id_ticket = %s",
+        "SELECT estado, fecha_creacion, fecha_limite_resolucion, id_usuario, id_asignado FROM tickets WHERE id_ticket = %s",
         (id_ticket,),
     )
     ticket = cursor.fetchone()
@@ -291,8 +303,18 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
         )
 
     conn.commit()
+
+    destinatarios = list({ticket['id_usuario'], ticket.get('id_asignado')} - {None, id_usuario})
+
     cursor.close()
     conn.close()
+
+    notif_repo.notificar_usuarios(
+        destinatarios, 'cambio_estado',
+        f"Ticket #{id_ticket} actualizado a: {nuevo_estado}",
+        referencia_id=id_ticket, referencia_tipo='ticket'
+    )
+
     return resultado_sla
 
 
@@ -393,7 +415,7 @@ def editar_ticket(id_ticket: int, campos: dict, id_usuario: int, rol: str):
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
-        "SELECT titulo, descripcion, prioridad, dispositivo, tipo_problema, estado FROM tickets WHERE id_ticket = %s",
+        "SELECT titulo, descripcion, prioridad, dispositivo, tipo_problema, estado, id_usuario, id_asignado FROM tickets WHERE id_ticket = %s",
         (id_ticket,),
     )
     ticket_actual = cursor.fetchone()
@@ -447,6 +469,14 @@ def editar_ticket(id_ticket: int, campos: dict, id_usuario: int, rol: str):
         )
 
     conn.commit()
+
+    destinatarios = list({ticket_actual['id_usuario'], ticket_actual.get('id_asignado')} - {None, id_usuario})
+    notif_repo.notificar_usuarios(
+        destinatarios, 'ticket_editado',
+        f"Ticket #{id_ticket} ha sido editado",
+        referencia_id=id_ticket, referencia_tipo='ticket'
+    )
+
     cursor.close()
     conn.close()
     return True
@@ -503,6 +533,14 @@ def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, 
     )
 
     conn.commit()
+
+    if id_asignado and id_asignado != id_usuario:
+        notif_repo.crear_notificacion(
+            id_asignado, 'ticket_asignado',
+            f"Se te ha asignado el ticket #{id_ticket}",
+            referencia_id=id_ticket, referencia_tipo='ticket'
+        )
+
     cursor.close()
     conn.close()
     return True
