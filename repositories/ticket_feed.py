@@ -4,12 +4,15 @@ from repositories import notificaciones as notif_repo
 # Agregar un registro al feed (comentario o actividad)
 def agregar_comentario(id_ticket, tipo, id_usuario=None, detalle=None):
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     sql = """
         INSERT INTO ticket_feed (id_ticket, tipo, id_usuario, detalle, fecha)
         VALUES (%s, %s, %s, %s, NOW())
     """
+
     # Obtener destinatarios del ticket
+    cursor.execute(sql, (id_ticket, tipo, id_usuario, detalle))
+
     cursor.execute(
         "SELECT id_usuario, id_asignado FROM tickets WHERE id_ticket = %s",
         (id_ticket,)

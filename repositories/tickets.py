@@ -140,7 +140,7 @@ def listar_tickets(
         params = []
 
         if rol not in ("admin", "soporte"):
-            where_clauses.append("id_usuario = %s")
+            where_clauses.append("t.id_usuario = %s")
             params.append(id_usuario)
 
         if estado:
