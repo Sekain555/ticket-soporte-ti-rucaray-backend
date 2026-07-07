@@ -2,6 +2,15 @@ from database import get_connection
 from repositories.ticket_feed import agregar_comentario
 from typing import Optional
 from repositories import notificaciones as notif_repo
+from services.email import enviar_email_multiples
+from services.email import enviar_email, enviar_email_multiples
+from templates.email_templates import (
+    template_ticket_creado,
+    template_ticket_asignado,
+    template_ticket_cerrado,
+    template_comentario,
+    template_sla_vencido,
+)
 
 
 # Crear un nuevo ticket
@@ -75,19 +84,39 @@ def crear_ticket(
     )
     conn.commit()
 
+    # Obtener nombre del creador
+    cursor.execute(
+        "SELECT nombre, apellido FROM usuarios WHERE id_usuario = %s",
+        (id_usuario,)
+    )
+    creador = cursor.fetchone()
+    nombre_creador = f"{creador['nombre']} {creador['apellido']}" if creador else str(id_usuario)
+
     # Obtener tecnicos para notificar
-    cursor.execute("SELECT id_usuario FROM usuarios WHERE rol IN ('admin', 'soporte')")
-    tecnicos = [r['id_usuario'] for r in cursor.fetchall()]
+    cursor.execute(
+        "SELECT id_usuario, correo FROM usuarios WHERE rol IN ('admin', 'soporte')"
+    )
+    rows = cursor.fetchall()
+    tecnicos = [r["id_usuario"] for r in rows]
+    correos_tecnicos = [r["correo"] for r in rows]
 
     cursor.close()
     conn.close()
 
     notif_repo.notificar_usuarios(
-        tecnicos, 'ticket_creado',
+        tecnicos,
+        "ticket_creado",
         f"Nuevo ticket #{id_ticket}: {titulo}",
-        referencia_id=id_ticket, referencia_tipo='ticket'
+        referencia_id=id_ticket,
+        referencia_tipo="ticket",
     )
-    
+
+    enviar_email_multiples(
+        correos_tecnicos,
+        f"Nuevo ticket #{id_ticket}: {titulo}",
+        template_ticket_creado(id_ticket, titulo, nombre_creador, prioridad),
+    )
+
     return id_ticket
 
 
@@ -228,7 +257,14 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
 
     # Obtener datos actuales del ticket
     cursor.execute(
-        "SELECT estado, fecha_creacion, fecha_limite_resolucion, id_usuario, id_asignado FROM tickets WHERE id_ticket = %s",
+        """
+        SELECT t.estado, t.fecha_creacion, t.fecha_limite_resolucion, 
+               t.id_usuario, t.id_asignado, t.titulo,
+               u.correo AS correo_creador
+        FROM tickets t
+        JOIN usuarios u ON t.id_usuario = u.id_usuario
+        WHERE t.id_ticket = %s
+        """,
         (id_ticket,),
     )
     ticket = cursor.fetchone()
@@ -304,16 +340,27 @@ def actualizar_estado_ticket(id_ticket, nuevo_estado, id_usuario, comentario=Non
 
     conn.commit()
 
-    destinatarios = list({ticket['id_usuario'], ticket.get('id_asignado')} - {None, id_usuario})
+    destinatarios = list(
+        {ticket["id_usuario"], ticket.get("id_asignado")} - {None, id_usuario}
+    )
+
+    notif_repo.notificar_usuarios(
+        destinatarios,
+        "cambio_estado",
+        f"Ticket #{id_ticket} actualizado a: {nuevo_estado}",
+        referencia_id=id_ticket,
+        referencia_tipo="ticket",
+    )
+
+    if nuevo_estado == "cerrado":
+        enviar_email(
+            ticket['correo_creador'],
+            f"Tu ticket #{id_ticket} ha sido cerrado",
+            template_ticket_cerrado(id_ticket, ticket['titulo'], resultado_sla)
+        )
 
     cursor.close()
     conn.close()
-
-    notif_repo.notificar_usuarios(
-        destinatarios, 'cambio_estado',
-        f"Ticket #{id_ticket} actualizado a: {nuevo_estado}",
-        referencia_id=id_ticket, referencia_tipo='ticket'
-    )
 
     return resultado_sla
 
@@ -470,18 +517,30 @@ def editar_ticket(id_ticket: int, campos: dict, id_usuario: int, rol: str):
 
     conn.commit()
 
-    destinatarios = list({ticket_actual['id_usuario'], ticket_actual.get('id_asignado')} - {None, id_usuario})
+    destinatarios = list(
+        {ticket_actual["id_usuario"], ticket_actual.get("id_asignado")}
+        - {None, id_usuario}
+    )
     notif_repo.notificar_usuarios(
-        destinatarios, 'ticket_editado',
+        destinatarios,
+        "ticket_editado",
         f"Ticket #{id_ticket} ha sido editado",
-        referencia_id=id_ticket, referencia_tipo='ticket'
+        referencia_id=id_ticket,
+        referencia_tipo="ticket",
     )
 
     cursor.close()
     conn.close()
     return True
 
-def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, rol: str, comentario: str = None):
+# Asignar un ticket a un técnico
+def asignar_ticket(
+    id_ticket: int,
+    id_asignado: Optional[int],
+    id_usuario: int,
+    rol: str,
+    comentario: str = None,
+):
     if rol not in ("admin", "soporte"):
         raise PermissionError("No autorizado para asignar tickets")
 
@@ -490,8 +549,7 @@ def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, 
 
     # Verificar que el ticket existe
     cursor.execute(
-        "SELECT id_ticket, id_asignado FROM tickets WHERE id_ticket = %s",
-        (id_ticket,)
+        "SELECT id_ticket, id_asignado FROM tickets WHERE id_ticket = %s", (id_ticket,)
     )
     ticket = cursor.fetchone()
     if not ticket:
@@ -510,7 +568,7 @@ def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, 
     if id_asignado:
         cursor.execute(
             "SELECT nombre, apellido FROM usuarios WHERE id_usuario = %s",
-            (id_asignado,)
+            (id_asignado,),
         )
         tecnico = cursor.fetchone()
         if tecnico:
@@ -519,7 +577,7 @@ def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, 
     # Actualizar asignación
     cursor.execute(
         "UPDATE tickets SET id_asignado = %s, fecha_actualizacion = NOW() WHERE id_ticket = %s",
-        (id_asignado, id_ticket)
+        (id_asignado, id_ticket),
     )
 
     # Registrar en feed
@@ -529,16 +587,39 @@ def asignar_ticket(id_ticket: int, id_asignado: Optional[int], id_usuario: int, 
 
     cursor.execute(
         "INSERT INTO ticket_feed (id_ticket, id_usuario, tipo, detalle, fecha) VALUES (%s, %s, %s, %s, NOW())",
-        (id_ticket, id_usuario, "asignacion", detalle)
+        (id_ticket, id_usuario, "asignacion", detalle),
     )
 
     conn.commit()
 
     if id_asignado and id_asignado != id_usuario:
         notif_repo.crear_notificacion(
-            id_asignado, 'ticket_asignado',
+            id_asignado,
+            "ticket_asignado",
             f"Se te ha asignado el ticket #{id_ticket}",
-            referencia_id=id_ticket, referencia_tipo='ticket'
+            referencia_id=id_ticket,
+            referencia_tipo="ticket",
+        )
+
+    # Obtener datos para email
+    cursor.execute(
+        "SELECT titulo FROM tickets WHERE id_ticket = %s",
+        (id_ticket,)
+    )
+    ticket_data = cursor.fetchone()
+
+    cursor.execute(
+        "SELECT nombre, apellido, correo FROM usuarios WHERE id_usuario = %s",
+        (id_asignado,)
+    )
+    tecnico = cursor.fetchone()
+
+    if tecnico and ticket_data:
+        nombre_asignado = f"{tecnico['nombre']} {tecnico['apellido']}"
+        enviar_email(
+            tecnico['correo'],
+            f"Se te ha asignado el ticket #{id_ticket}",
+            template_ticket_asignado(id_ticket, ticket_data['titulo'], nombre_asignado)
         )
 
     cursor.close()

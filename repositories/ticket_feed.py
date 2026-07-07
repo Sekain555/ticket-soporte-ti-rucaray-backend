@@ -1,5 +1,7 @@
 from database import get_connection
 from repositories import notificaciones as notif_repo
+from services.email import enviar_email_multiples
+from templates.email_templates import template_comentario
 
 # Agregar un registro al feed (comentario o actividad)
 def agregar_comentario(id_ticket, tipo, id_usuario=None, detalle=None):
@@ -14,10 +16,33 @@ def agregar_comentario(id_ticket, tipo, id_usuario=None, detalle=None):
     cursor.execute(sql, (id_ticket, tipo, id_usuario, detalle))
 
     cursor.execute(
-        "SELECT id_usuario, id_asignado FROM tickets WHERE id_ticket = %s",
+        """
+        SELECT t.id_usuario, t.id_asignado, t.titulo,
+               u.correo AS correo_creador
+        FROM tickets t
+        JOIN usuarios u ON t.id_usuario = u.id_usuario
+        WHERE t.id_ticket = %s
+        """,
         (id_ticket,)
     )
     ticket = cursor.fetchone()
+
+    correo_asignado = None
+    if ticket and ticket.get('id_asignado'):
+        cursor.execute(
+            "SELECT correo FROM usuarios WHERE id_usuario = %s",
+            (ticket['id_asignado'],)
+        )
+        asignado = cursor.fetchone()
+        correo_asignado = asignado['correo'] if asignado else None
+
+    correo_autor = None
+    cursor.execute(
+        "SELECT correo FROM usuarios WHERE id_usuario = %s",
+        (id_usuario,)
+    )
+    autor = cursor.fetchone()
+    correo_autor = autor['correo'] if autor else None
     
     conn.commit()
     id_feed = cursor.lastrowid
@@ -31,6 +56,14 @@ def agregar_comentario(id_ticket, tipo, id_usuario=None, detalle=None):
             destinatarios, 'comentario_ticket',
             f"Nuevo comentario en ticket #{id_ticket}",
             referencia_id=id_ticket, referencia_tipo='ticket'
+        )
+
+    if tipo == 'comentario' and ticket:
+        correos = [c for c in [ticket['correo_creador'], correo_asignado] if c and c != correo_autor]
+        enviar_email_multiples(
+            correos,
+            f"Nuevo comentario en ticket #{id_ticket}",
+            template_comentario(id_ticket, ticket['titulo'], detalle, str(id_usuario))
         )
     
     return id_feed
