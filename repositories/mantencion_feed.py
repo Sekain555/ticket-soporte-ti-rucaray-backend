@@ -1,12 +1,14 @@
 from database import get_connection
 from typing import Optional
 from repositories import notificaciones as notif_repo
+from services.email import enviar_email_multiples
+from templates.email_templates import template_comentario
 
 
 def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str):
     """Registra un evento en el feed de la mantención."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute(
         """
         INSERT INTO mantencion_feed (id_mantencion, id_usuario, tipo, detalle, fecha)
@@ -17,10 +19,34 @@ def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str)
 
     # Obtener destinatarios de la mantención
     cursor.execute(
-        "SELECT id_usuario_solicitante, id_usuario_asignado FROM mantenciones WHERE id_mantencion = %s",
+        """
+        SELECT m.id_usuario_solicitante, m.id_usuario_asignado, m.titulo,
+               u.correo AS correo_solicitante
+        FROM mantenciones m
+        JOIN usuarios u ON m.id_usuario_solicitante = u.id_usuario
+        WHERE m.id_mantencion = %s
+        """,
         (id_mantencion,)
     )
     mantencion = cursor.fetchone()
+
+    correo_asignado = None
+    if mantencion and mantencion.get('id_usuario_asignado'):
+        cursor.execute(
+            "SELECT correo FROM usuarios WHERE id_usuario = %s",
+            (mantencion['id_usuario_asignado'],)
+        )
+        asignado = cursor.fetchone()
+        correo_asignado = asignado['correo'] if asignado else None
+
+    correo_autor = None
+    cursor.execute(
+        "SELECT correo, nombre, apellido FROM usuarios WHERE id_usuario = %s",
+        (id_usuario,)
+    )
+    autor = cursor.fetchone()
+    correo_autor = autor['correo'] if autor else None
+    nombre_autor = f"{autor['nombre']} {autor['apellido']}" if autor else str(id_usuario)
 
     conn.commit()
     id_feed = cursor.lastrowid
@@ -36,6 +62,14 @@ def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str)
             destinatarios, 'comentario_mantencion',
             f"Nuevo comentario en mantención #{id_mantencion}",
             referencia_id=id_mantencion, referencia_tipo='mantencion'
+        )
+
+    if tipo == 'comentario' and mantencion:
+        correos = [c for c in [mantencion['correo_solicitante'], correo_asignado] if c and c != correo_autor]
+        enviar_email_multiples(
+            correos,
+            f"Nuevo comentario en mantención #{id_mantencion}",
+            template_comentario(id_mantencion, mantencion['titulo'], detalle, nombre_autor)
         )
 
     return id_feed
