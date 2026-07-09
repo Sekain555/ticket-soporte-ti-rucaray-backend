@@ -3,6 +3,8 @@ from typing import Optional
 from repositories import notificaciones as notif_repo
 from services.email import enviar_email_multiples
 from templates.email_templates import template_comentario
+from repositories import menciones as menciones_repo
+import re
 
 
 def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str):
@@ -48,29 +50,66 @@ def agregar_evento(id_mantencion: int, id_usuario: int, tipo: str, detalle: str)
     correo_autor = autor['correo'] if autor else None
     nombre_autor = f"{autor['nombre']} {autor['apellido']}" if autor else str(id_usuario)
 
+    # Detectar menciones en el comentario
+    usuarios_mencionados = []
+    correos_mencionados = []
+    if tipo == 'comentario' and detalle:
+        nombres = re.findall(r'@([A-Za-záéíóúÁÉÍÓÚñÑ]+)', detalle)
+        if nombres:
+            formato = ','.join(['%s'] * len(nombres))
+            cursor.execute(
+                f"SELECT id_usuario, correo, nombre, apellido FROM usuarios WHERE CONCAT(nombre, apellido) IN ({formato})",
+                tuple(nombres)
+            )
+            mencionados = cursor.fetchall()
+            usuarios_mencionados = [m['id_usuario'] for m in mencionados]
+            correos_mencionados = [m['correo'] for m in mencionados if m['correo'] != correo_autor]
+
     conn.commit()
     id_feed = cursor.lastrowid
+
+    if usuarios_mencionados:
+        menciones_repo.registrar_menciones(usuarios_mencionados, id_mantencion, 'mantencion', id_feed)
+
     cursor.close()
     conn.close()
 
     # Notificar solo si es comentario
     if tipo == 'comentario' and mantencion:
-        destinatarios = list(
-            {mantencion['id_usuario_solicitante'], mantencion.get('id_usuario_asignado')} - {None, id_usuario}
-        )
-        notif_repo.notificar_usuarios(
-            destinatarios, 'comentario_mantencion',
-            f"Nuevo comentario en mantención #{id_mantencion}",
-            referencia_id=id_mantencion, referencia_tipo='mantencion'
-        )
+        destinatarios_normales = list({mantencion['id_usuario_solicitante'], mantencion.get('id_usuario_asignado')} - {None, id_usuario})
+        destinatarios_normales = list(set(destinatarios_normales) - set(usuarios_mencionados))
+
+        if destinatarios_normales:
+            notif_repo.notificar_usuarios(
+                destinatarios_normales, 'comentario_mantencion',
+                f"Nuevo comentario en mantención #{id_mantencion}",
+                referencia_id=id_mantencion, referencia_tipo='mantencion'
+            )
+
+        if usuarios_mencionados:
+            notif_repo.notificar_usuarios(
+                [u for u in usuarios_mencionados if u != id_usuario],
+                'mencion_mantencion',
+                f"Te mencionaron en la mantención #{id_mantencion}",
+                referencia_id=id_mantencion, referencia_tipo='mantencion'
+            )
 
     if tipo == 'comentario' and mantencion:
-        correos = [c for c in [mantencion['correo_solicitante'], correo_asignado] if c and c != correo_autor]
-        enviar_email_multiples(
-            correos,
-            f"Nuevo comentario en mantención #{id_mantencion}",
-            template_comentario(id_mantencion, mantencion['titulo'], detalle, nombre_autor)
-        )
+        correos_normales = list(set([c for c in [mantencion['correo_solicitante'], correo_asignado] if c and c != correo_autor]) - set(correos_mencionados))
+    
+        if correos_normales:
+            enviar_email_multiples(
+                correos_normales,
+                f"Nuevo comentario en mantención #{id_mantencion}",
+                template_comentario(id_mantencion, mantencion['titulo'], detalle, nombre_autor)
+            )
+    
+        if correos_mencionados:
+            enviar_email_multiples(
+                correos_mencionados,
+                f"Te mencionaron en la mantención #{id_mantencion}",
+                template_comentario(id_mantencion, mantencion['titulo'], detalle, nombre_autor)
+            )
 
     return id_feed
 

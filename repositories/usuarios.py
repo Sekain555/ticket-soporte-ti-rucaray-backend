@@ -36,18 +36,18 @@ def listar_usuarios(rol: str = None):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     if rol == 'tecnicos':
-        sql = """SELECT id_usuario, nombre, apellido, rol 
+        sql = """SELECT id_usuario, nombre, apellido, rol, puesto
                  FROM usuarios 
                  WHERE rol IN ('admin', 'soporte') 
                  ORDER BY nombre ASC"""
         cursor.execute(sql)
     elif rol:
-        sql = """SELECT id_usuario, nombre, apellido, rol 
+        sql = """SELECT id_usuario, nombre, apellido, rol, puesto
                  FROM usuarios WHERE rol = %s 
                  ORDER BY nombre ASC"""
         cursor.execute(sql, (rol,))
     else:
-        sql = """SELECT id_usuario, nombre, apellido, rol 
+        sql = """SELECT id_usuario, nombre, apellido, rol, puesto
                  FROM usuarios ORDER BY nombre ASC"""
         cursor.execute(sql)
     users = cursor.fetchall()

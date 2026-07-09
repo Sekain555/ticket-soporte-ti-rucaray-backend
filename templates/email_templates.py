@@ -157,3 +157,16 @@ def template_mantencion(id_mantencion: int, titulo: str, nuevo_estado: str, fech
     {_boton('Ver mantención', url)}
     """
     return _base_template(contenido)
+
+def template_mencion(id_ticket: int, titulo: str, comentario: str, autor: str) -> str:
+    url = f"{BASE_URL}/detalle-ticket/{id_ticket}"
+    contenido = f"""
+    <p style="color:#9ca3af; font-size:13px; margin:0 0 8px;">TE MENCIONARON</p>
+    <h2 style="color:#ffffff; margin:0 0 24px; font-size:18px;">#{id_ticket} — {titulo}</h2>
+    <div style="background:#2a2a2a; border-radius:8px; padding:16px; margin:16px 0;">
+      <p style="color:#9ca3af; font-size:12px; margin:0 0 8px;">{autor}</p>
+      <p style="color:#d1d5db; font-size:14px; margin:0;">{comentario}</p>
+    </div>
+    {_boton('Ver ticket', url)}
+    """
+    return _base_template(contenido)
