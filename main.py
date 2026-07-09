@@ -11,6 +11,7 @@ from repositories import (
 )
 from services import auth
 from version import __version__
+from repositories import notificaciones as notif_repo
 
 app = FastAPI(title="Tickets API", version=__version__)
 
@@ -82,8 +83,8 @@ def login(data: dict):
 
 # Listar usuarios
 @app.get("/usuarios")
-def listar_usuarios_endpoint():
-    return usuarios.listar_usuarios()
+def listar_usuarios_endpoint(rol: str = Query(None)):
+    return usuarios.listar_usuarios(rol=rol)
 
 
 # Crear tickets
@@ -104,6 +105,7 @@ def crear_ticket_endpoint(ticket: dict, request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # Listar tickets
 @app.get("/tickets/")
@@ -256,7 +258,8 @@ def actualizar_tipo_problema_ticket_endpoint(
         raise HTTPException(
             status_code=500, detail=f"Error al actualizar tipo de problema: {str(e)}"
         )
-    
+
+
 @app.patch("/tickets/{id_ticket}")
 def editar_ticket_endpoint(id_ticket: int, data: dict, request: Request):
     try:
@@ -275,7 +278,29 @@ def editar_ticket_endpoint(id_ticket: int, data: dict, request: Request):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         import traceback
+
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/tickets/{id_ticket}/asignar")
+def asignar_ticket_endpoint(id_ticket: int, data: dict, request: Request):
+    try:
+        current_user = auth.obtener_usuario_desde_request(request)
+        tickets.asignar_ticket(
+            id_ticket=id_ticket,
+            id_asignado=data.get("id_asignado"),
+            id_usuario=current_user["id_usuario"],
+            rol=current_user["rol"],
+            comentario=data.get("comentario"),
+        )
+        ticket = tickets.obtener_ticket(id_ticket)
+        return ticket
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -388,7 +413,8 @@ def actualizar_estado_mantencion_endpoint(
             status_code=500, detail=f"Error al actualizar estado: {str(e)}"
         )
 
-    # Feed de mantenciones
+
+# Feed de mantenciones
 
 
 @app.post("/mantenciones/{id_mantencion}/feed")
@@ -507,3 +533,31 @@ def actualizar_dispositivo_endpoint(id_dispositivo: int, data: dict, request: Re
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# Notificaciones
+# ============================================================
+
+
+@app.get("/notificaciones/")
+def listar_notificaciones_endpoint(request: Request):
+    payload = auth.obtener_payload(request)
+    id_usuario = int(payload.get("sub"))
+    return notif_repo.listar_notificaciones(id_usuario)
+
+
+@app.get("/notificaciones/no-leidas")
+def contar_no_leidas_endpoint(request: Request):
+    payload = auth.obtener_payload(request)
+    id_usuario = int(payload.get("sub"))
+    return {"total": notif_repo.contar_no_leidas(id_usuario)}
+
+
+@app.patch("/notificaciones/marcar-leidas")
+def marcar_leidas_endpoint(request: Request, data: dict = {}):
+    payload = auth.obtener_payload(request)
+    id_usuario = int(payload.get("sub"))
+    id_notificacion = data.get("id_notificacion")
+    notif_repo.marcar_leidas(id_usuario, id_notificacion)
+    return {"status": "ok"}

@@ -31,12 +31,25 @@ def autenticar_usuario(usuario, contraseña):
         return user
     return None
 
-# Listar usuarios (solo para pruebas)
-def listar_usuarios():
+# Listar usuarios
+def listar_usuarios(rol: str = None):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    sql = "SELECT id_usuario, nombre, apellido, correo, usuario, rol, fecha_creacion FROM usuarios"
-    cursor.execute(sql)
+    if rol == 'tecnicos':
+        sql = """SELECT id_usuario, nombre, apellido, rol, puesto
+                 FROM usuarios 
+                 WHERE rol IN ('admin', 'soporte') 
+                 ORDER BY nombre ASC"""
+        cursor.execute(sql)
+    elif rol:
+        sql = """SELECT id_usuario, nombre, apellido, rol, puesto
+                 FROM usuarios WHERE rol = %s 
+                 ORDER BY nombre ASC"""
+        cursor.execute(sql, (rol,))
+    else:
+        sql = """SELECT id_usuario, nombre, apellido, rol, puesto
+                 FROM usuarios ORDER BY nombre ASC"""
+        cursor.execute(sql)
     users = cursor.fetchall()
     cursor.close()
     conn.close()

@@ -2,6 +2,9 @@ from database import get_connection
 from typing import Optional
 from datetime import timedelta
 from repositories import mantencion_feed
+from repositories import notificaciones as notif_repo
+from templates.email_templates import template_mantencion
+from services.email import enviar_email, enviar_email_multiples
 
 
 def serializar_mantencion(m: dict) -> dict:
@@ -70,12 +73,31 @@ def crear_mantencion(
     )
     conn.commit()
     id_mantencion = cursor.lastrowid
+
+    # Obtener tecnicos para notificar
+    cursor.execute("SELECT id_usuario, correo FROM usuarios WHERE rol IN ('admin', 'soporte')")
+    rows = cursor.fetchall()
+    tecnicos = [r['id_usuario'] for r in rows]
+    correos_tecnicos = [r['correo'] for r in rows]
+
     cursor.close()
     conn.close()
 
     # Registrar en feed
     mantencion_feed.agregar_evento(
         id_mantencion, id_usuario_solicitante, 'creacion', 'Mantención creada'
+    )
+
+    notif_repo.notificar_usuarios(
+        tecnicos, 'mantencion_creada',
+        f"Nueva mantención agendada: {titulo}",
+        referencia_id=id_mantencion, referencia_tipo='mantencion'
+    )
+
+    enviar_email_multiples(
+        correos_tecnicos,
+        f"Nueva mantención agendada: {titulo}",
+        template_mantencion(id_mantencion, titulo, 'propuesto', fecha_propuesta, hora_inicio, hora_fin)
     )
 
     return id_mantencion
@@ -197,7 +219,13 @@ def actualizar_estado_mantencion(
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
-        'SELECT estado FROM mantenciones WHERE id_mantencion = %s',
+        """
+        SELECT m.estado, m.id_usuario_solicitante, m.titulo,
+               u.correo AS correo_solicitante
+        FROM mantenciones m
+        JOIN usuarios u ON m.id_usuario_solicitante = u.id_usuario
+        WHERE m.id_mantencion = %s
+        """,
         (id_mantencion,)
     )
     row = cursor.fetchone()
@@ -218,7 +246,25 @@ def actualizar_estado_mantencion(
         """,
         (nuevo_estado, notas_soporte, id_mantencion),
     )
+
+    id_solicitante = row['id_usuario_solicitante']
+
     conn.commit()
+
+    if id_solicitante != id_usuario:
+        notif_repo.crear_notificacion(
+            id_solicitante, 'mantencion_actualizada',
+            f"Tu mantención #{id_mantencion} cambió a: {nuevo_estado}",
+            referencia_id=id_mantencion, referencia_tipo='mantencion'
+        )
+
+    if id_solicitante != id_usuario:
+        enviar_email(
+            row['correo_solicitante'],
+            f"Tu mantención #{id_mantencion} ha sido actualizada",
+            template_mantencion(id_mantencion, row['titulo'], nuevo_estado, '', '', '')
+        )
+
     cursor.close()
     conn.close()
 
@@ -248,7 +294,13 @@ def reprogramar_mantencion(
 
     # Obtener datos actuales
     cursor.execute(
-        'SELECT fecha_propuesta, hora_inicio, hora_fin FROM mantenciones WHERE id_mantencion = %s',
+        """
+        SELECT m.fecha_propuesta, m.hora_inicio, m.hora_fin, m.id_usuario_solicitante, m.titulo,
+               u.correo AS correo_solicitante
+        FROM mantenciones m
+        JOIN usuarios u ON m.id_usuario_solicitante = u.id_usuario
+        WHERE m.id_mantencion = %s
+        """,
         (id_mantencion,)
     )
     row = cursor.fetchone()
@@ -261,6 +313,7 @@ def reprogramar_mantencion(
     fecha_anterior = fila_actual['fecha_propuesta']
     hora_inicio_anterior = fila_actual['hora_inicio']
     hora_fin_anterior = fila_actual['hora_fin']
+    id_solicitante = row['id_usuario_solicitante']
 
     # Validar conflicto excluyendo la mantención actual
     cursor.execute(
@@ -301,6 +354,21 @@ def reprogramar_mantencion(
         (nueva_fecha, nueva_hora_inicio, nueva_hora_fin, notas, id_mantencion),
     )
     conn.commit()
+
+    if id_solicitante != id_usuario:
+        notif_repo.crear_notificacion(
+            id_solicitante, 'mantencion_reprogramada',
+            f"Tu mantención #{id_mantencion} ha sido reprogramada",
+            referencia_id=id_mantencion, referencia_tipo='mantencion'
+        )
+
+    if id_solicitante != id_usuario:
+        enviar_email(
+            row['correo_solicitante'],
+            f"Tu mantención #{id_mantencion} ha sido reprogramada",
+            template_mantencion(id_mantencion, row['titulo'], 'reprogramado', nueva_fecha, nueva_hora_inicio, nueva_hora_fin)
+        )
+
     cursor.close()
     conn.close()
 

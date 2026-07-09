@@ -1,5 +1,37 @@
 # 📗 CHANGELOG — Backend (FastAPI / MySQL)
 
+## [1.5.0] — 2026-07-08
+
+### Added
+- Campo `id_asignado` en tabla `tickets` como FK a `usuarios`.
+- Función `asignar_ticket()` en `tickets.py` con control por rol y registro en feed.
+- Endpoint `PATCH /tickets/{id_ticket}/asignar`.
+- `obtener_ticket()` actualizado con LEFT JOIN para retornar `nombre_asignado` y `apellido_asignado`.
+- Tabla `notificaciones` con campos `id_notificacion`, `id_usuario`, `tipo`, `mensaje`, `leida`, `referencia_id`, `referencia_tipo`, `fecha`.
+- Repository `notificaciones.py` con funciones `crear_notificacion()`, `notificar_usuarios()`, `listar_notificaciones()`, `contar_no_leidas()` y `marcar_leidas()`.
+- Endpoints `GET /notificaciones/`, `GET /notificaciones/no-leidas`, `PATCH /notificaciones/marcar-leidas`.
+- Integración de notificaciones in-app en `tickets.py`, `mantenciones.py`, `ticket_feed.py` y `mantencion_feed.py`.
+- `services/email.py` con funciones `enviar_email()` y `enviar_email_multiples()` — SMTP `plantaloslirios.cl`.
+- `templates/email_templates.py` con templates HTML para todos los eventos.
+- Integración de emails en creación/asignación/cierre de tickets, comentarios de feed, creación/confirmación/cancelación/reprogramación de mantenciones y comentarios de mantenciones.
+- Tabla `menciones` con campos `id_mencion`, `id_usuario`, `referencia_id`, `referencia_tipo`, `id_feed`, `fecha`.
+- Repository `menciones.py` con funciones `registrar_mencion()`, `registrar_menciones()`, `obtener_mencionados()` y `es_mencionado()`.
+- Detección de menciones `@NombreApellido` en `ticket_feed.py` y `mantencion_feed.py` via regex con búsqueda por `CONCAT(nombre, apellido)`.
+- Notificación y email diferenciados para usuarios mencionados vs destinatarios normales.
+- Campo `puesto` agregado al SELECT de `listar_usuarios()`.
+- Filtro `rol=tecnicos` en `listar_usuarios()` para obtener admin+soporte simultáneamente.
+
+### Compatibility
+- Probado con Frontend `1.6.0`.
+
+### Notes
+- Release completo de la **Sección 3 — Asignación y Colaboración**.
+- Variables SMTP en `.env` — nunca en el repositorio.
+- `BASE_URL` en `email_templates.py` pendiente mover a `.env`.
+- Notificaciones email para SLA vencido/próximo a vencer pospuestas — anotadas en IDEAS Y FEATURES.
+
+---
+
 ## [1.4.0] — 2026-06-18
 
 ### Added
@@ -158,6 +190,7 @@
 
 | Frontend | Backend | Estado | Fecha | Notas |
 |---|---|---|---|---|
+| 1.6.0 | 1.5.0 | ✅ Compatible | 2026-07-08 | Release Asignación y Colaboración |
 | 1.5.0 | 1.4.0 | ✅ Compatible | 2026-06-18 | Release Gestión y Búsqueda |
 | 1.4.0 | 1.3.0 | ✅ Compatible | 2026-05-10 | Release Mejoras UX y Flujo |
 | 1.3.0 | 1.3.0 | ✅ Compatible | 2026-04-29 | Release MVP Inventario de Dispositivos |
